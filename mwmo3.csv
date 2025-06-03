@@ -1,0 +1,21 @@
+対象ログ,目的・用途,クエリ文,解説,使用場所
+CloudTrail,EC2の起動操作を確認,"SELECT eventTime, userIdentity.userName, eventName FROM cloudtrail_logs WHERE eventName = 'StartInstances';",EC2を誰がいつ起動したかを確認,Athena
+CloudTrail,ログイン失敗・操作失敗の確認,SELECT * FROM cloudtrail_logs WHERE errorCode IS NOT NULL;,AWSで失敗した操作イベントを抽出,Athena
+CloudTrail,特定のIPからの操作確認,SELECT * FROM cloudtrail_logs WHERE sourceIPAddress = '203.0.113.100';,指定されたIPアドレスからの操作ログを確認,Athena
+CloudTrail,セキュリティグループ操作の確認,"SELECT * FROM cloudtrail_logs WHERE eventName IN ('AuthorizeSecurityGroupIngress', 'RevokeSecurityGroupIngress');",セキュリティグループの許可/削除操作の確認,Athena
+CloudTrail,IAMユーザー作成の確認,"SELECT eventTime, userIdentity.userName FROM cloudtrail_logs WHERE eventName = 'CreateUser';",IAMユーザー作成イベントの確認,Athena
+ELBアクセスログ,HTTP 5xx エラーの確認,SELECT * FROM elb_logs WHERE elb_status_code LIKE '5%';,ELBのリクエストでサーバーエラー（500番台）を抽出,Athena
+RDS Slow Logs,遅延クエリの確認,SELECT * FROM rds_slowquery_logs WHERE query_time > 1.0 ORDER BY query_time DESC;,1秒以上かかったSQL文の抽出,Athena
+アプリログ,ERRORログの確認,SELECT * FROM app_logs WHERE log_level = 'ERROR';,ログレベルがERRORの行を抽出,Athena
+WAFログ,ブロックされたアクセスの抽出,SELECT * FROM waf_logs WHERE action = 'BLOCK';,WAFによって拒否されたアクセスのログ,Athena
+WinEventLog,Windowsログオン成功（イベントID: 4624）,SELECT * FROM winevent_logs WHERE event_id = 4624;,ログオン成功のイベント,Athena
+WinEventLog,Windowsログオン失敗（イベントID: 4625）,SELECT * FROM winevent_logs WHERE event_id = 4625;,ログオン失敗イベント,Athena
+CloudTrail,S3バケット操作の確認,SELECT * FROM cloudtrail_logs WHERE eventSource = 's3.amazonaws.com' AND (eventName = 'PutObject' OR eventName = 'GetObject');,S3オブジェクトのアップロード・ダウンロード操作の抽出,Athena
+CloudTrail,Lambda関数の更新記録,SELECT * FROM cloudtrail_logs WHERE eventName = 'UpdateFunctionCode';,Lambda関数のコード更新操作の確認,Athena
+CloudTrail,管理者権限の権限変更チェック,SELECT * FROM cloudtrail_logs WHERE eventName = 'PutUserPolicy' AND requestParameters.policyDocument LIKE '%AdministratorAccess%';,管理者権限のポリシーが追加されたかどうかの確認,Athena
+CloudWatch Logs,EC2起動イベントのログ確認,"fields @timestamp, @message | filter @message like /StartInstances/",CloudTrailログの中からEC2起動イベントを抽出,CloudWatch Logs Insights
+CloudWatch Logs,ERRORキーワードのあるアプリログを抽出,"fields @timestamp, @message | filter @message like /ERROR/",ERRORを含むログを抽出,CloudWatch Logs Insights
+CloudWatch Logs,RDS Slow LogのQuery_timeを確認,"fields @timestamp, @message | filter @message like /Query_time:/",RDSの遅いクエリに関するログ行を抽出,CloudWatch Logs Insights
+CloudWatch Logs,Windowsログ（4624）を抽出,"fields @timestamp, @message | filter @message like /4624/",ログオン成功のイベントID付きログを抽出,CloudWatch Logs Insights
+CloudWatch Logs,WAFでブロックされたアクセス確認,"fields @timestamp, action, terminatingRuleId | filter action = ""BLOCK""",WAFログのうちブロックされたものを表示,CloudWatch Logs Insights
+CloudWatch Logs,TrailでのDelete操作抽出,"fields @timestamp, @message | filter @message like /Delete/",削除系の操作をログから抽出,CloudWatch Logs Insights
