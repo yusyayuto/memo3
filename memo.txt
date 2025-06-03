@@ -1,0 +1,10 @@
+No	種別	対象サービス	目的（調査内容）	クエリ文（SQL）	備考
+1	Athena	WinEvent	ログオン成功の記録を抽出	SELECT * FROM winevent_logs WHERE event_id = 4624 AND event_time >= timestamp '2025-06-01 00:00:00';	event_id=4624でログオン成功
+2	Athena	CloudTrail	EC2起動・停止イベントを検索	SELECT eventTime, userIdentity.userName, eventName FROM cloudtrail_logs WHERE eventName IN ('StartInstances','StopInstances');	
+3	Athena	ELBアクセスログ	5xxエラーの確認	SELECT * FROM elb_logs WHERE elb_status_code LIKE '5%' AND time >= date '2025-06-01';	HTTP 5xx のみ抽出
+4	Athena	RDS SlowQuery	クエリ時間が長いSQLを確認	SELECT * FROM rds_slowquery_logs WHERE query_time > 5.0 ORDER BY query_time DESC;	
+5	Athena	WAF	ブロックされたリクエストを抽出	SELECT * FROM waf_logs WHERE action = 'BLOCK';	
+6	Athena	アプリログ	エラーのみ抽出	SELECT * FROM app_logs WHERE log_level = 'ERROR';	
+7	CW Insights	RDS Logs	Query_time を含むログ行を検索	`fields @timestamp, @message	filter @message like /Query_time:/`
+8	CW Insights	アプリログ	"ERROR" を含むログ行	`fields @timestamp, @message	filter @message like /ERROR/`
+9	CloudTrailGUI	CloudTrail	EC2 起動操作の履歴をGUIで検索	- GUI操作：eventName="StartInstances" でフィルター	手動操作
