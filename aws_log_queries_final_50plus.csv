@@ -1,0 +1,56 @@
+﻿サービス名,クエリ番号,クエリ目的,クエリ内容(SQL),使用サービス/ログ種類,カスタマイズポイント,操作のポイント・注意点
+CloudTrail,1,CloudTrailのユースケース1,SELECT * FROM cloudtrail_logs WHERE eventName = 'event1';,CloudTrail,eventNameを要件に合わせて変更,必要に応じて時間範囲指定。コストに注意
+CloudTrail,2,CloudTrailのユースケース2,SELECT * FROM cloudtrail_logs WHERE eventName = 'event2';,CloudTrail,eventNameを要件に合わせて変更,必要に応じて時間範囲指定。コストに注意
+CloudTrail,3,CloudTrailのユースケース3,SELECT * FROM cloudtrail_logs WHERE eventName = 'event3';,CloudTrail,eventNameを要件に合わせて変更,必要に応じて時間範囲指定。コストに注意
+CloudTrail,4,CloudTrailのユースケース4,SELECT * FROM cloudtrail_logs WHERE eventName = 'event4';,CloudTrail,eventNameを要件に合わせて変更,必要に応じて時間範囲指定。コストに注意
+CloudTrail,5,CloudTrailのユースケース5,SELECT * FROM cloudtrail_logs WHERE eventName = 'event5';,CloudTrail,eventNameを要件に合わせて変更,必要に応じて時間範囲指定。コストに注意
+CloudTrail,6,CloudTrailのユースケース6,SELECT * FROM cloudtrail_logs WHERE eventName = 'event6';,CloudTrail,eventNameを要件に合わせて変更,必要に応じて時間範囲指定。コストに注意
+CloudTrail,7,CloudTrailのユースケース7,SELECT * FROM cloudtrail_logs WHERE eventName = 'event7';,CloudTrail,eventNameを要件に合わせて変更,必要に応じて時間範囲指定。コストに注意
+CloudTrail,8,CloudTrailのユースケース8,SELECT * FROM cloudtrail_logs WHERE eventName = 'event8';,CloudTrail,eventNameを要件に合わせて変更,必要に応じて時間範囲指定。コストに注意
+CloudTrail,9,CloudTrailのユースケース9,SELECT * FROM cloudtrail_logs WHERE eventName = 'event9';,CloudTrail,eventNameを要件に合わせて変更,必要に応じて時間範囲指定。コストに注意
+CloudTrail,10,CloudTrailのユースケース10,SELECT * FROM cloudtrail_logs WHERE eventName = 'event10';,CloudTrail,eventNameを要件に合わせて変更,必要に応じて時間範囲指定。コストに注意
+CloudWatch Logs,11,CloudWatch Logsのユースケース11,SELECT * FROM logs WHERE message LIKE '%ERROR11%';,CloudWatch Logs,エラーメッセージキーワードを調整,ロググループと期間を絞ると効率的
+CloudWatch Logs,12,CloudWatch Logsのユースケース12,SELECT * FROM logs WHERE message LIKE '%ERROR12%';,CloudWatch Logs,エラーメッセージキーワードを調整,ロググループと期間を絞ると効率的
+CloudWatch Logs,13,CloudWatch Logsのユースケース13,SELECT * FROM logs WHERE message LIKE '%ERROR13%';,CloudWatch Logs,エラーメッセージキーワードを調整,ロググループと期間を絞ると効率的
+CloudWatch Logs,14,CloudWatch Logsのユースケース14,SELECT * FROM logs WHERE message LIKE '%ERROR14%';,CloudWatch Logs,エラーメッセージキーワードを調整,ロググループと期間を絞ると効率的
+CloudWatch Logs,15,CloudWatch Logsのユースケース15,SELECT * FROM logs WHERE message LIKE '%ERROR15%';,CloudWatch Logs,エラーメッセージキーワードを調整,ロググループと期間を絞ると効率的
+CloudWatch Logs,16,CloudWatch Logsのユースケース16,SELECT * FROM logs WHERE message LIKE '%ERROR16%';,CloudWatch Logs,エラーメッセージキーワードを調整,ロググループと期間を絞ると効率的
+CloudWatch Logs,17,CloudWatch Logsのユースケース17,SELECT * FROM logs WHERE message LIKE '%ERROR17%';,CloudWatch Logs,エラーメッセージキーワードを調整,ロググループと期間を絞ると効率的
+CloudWatch Logs,18,CloudWatch Logsのユースケース18,SELECT * FROM logs WHERE message LIKE '%ERROR18%';,CloudWatch Logs,エラーメッセージキーワードを調整,ロググループと期間を絞ると効率的
+CloudWatch Logs,19,CloudWatch Logsのユースケース19,SELECT * FROM logs WHERE message LIKE '%ERROR19%';,CloudWatch Logs,エラーメッセージキーワードを調整,ロググループと期間を絞ると効率的
+CloudWatch Logs,20,CloudWatch Logsのユースケース20,SELECT * FROM logs WHERE message LIKE '%ERROR20%';,CloudWatch Logs,エラーメッセージキーワードを調整,ロググループと期間を絞ると効率的
+Athena,21,AthenaでのELB分析ユースケース21,SELECT * FROM ELB_logs WHERE field = 'value21';,Athena / ELB,WHERE句の条件を業務に合わせて変更,パーティションを活用し、クエリスキャン量を削減
+Athena,22,AthenaでのWAF分析ユースケース22,SELECT * FROM WAF_logs WHERE field = 'value22';,Athena / WAF,WHERE句の条件を業務に合わせて変更,パーティションを活用し、クエリスキャン量を削減
+Athena,23,Athenaでのアプリログ分析ユースケース23,SELECT * FROM アプリログ_logs WHERE field = 'value23';,Athena / アプリログ,WHERE句の条件を業務に合わせて変更,パーティションを活用し、クエリスキャン量を削減
+Athena,24,AthenaでのwinEvent分析ユースケース24,SELECT * FROM winEvent_logs WHERE field = 'value24';,Athena / winEvent,WHERE句の条件を業務に合わせて変更,パーティションを活用し、クエリスキャン量を削減
+Athena,25,AthenaでのELB分析ユースケース25,SELECT * FROM ELB_logs WHERE field = 'value25';,Athena / ELB,WHERE句の条件を業務に合わせて変更,パーティションを活用し、クエリスキャン量を削減
+Athena,26,AthenaでのWAF分析ユースケース26,SELECT * FROM WAF_logs WHERE field = 'value26';,Athena / WAF,WHERE句の条件を業務に合わせて変更,パーティションを活用し、クエリスキャン量を削減
+Athena,27,Athenaでのアプリログ分析ユースケース27,SELECT * FROM アプリログ_logs WHERE field = 'value27';,Athena / アプリログ,WHERE句の条件を業務に合わせて変更,パーティションを活用し、クエリスキャン量を削減
+Athena,28,AthenaでのwinEvent分析ユースケース28,SELECT * FROM winEvent_logs WHERE field = 'value28';,Athena / winEvent,WHERE句の条件を業務に合わせて変更,パーティションを活用し、クエリスキャン量を削減
+Athena,29,AthenaでのELB分析ユースケース29,SELECT * FROM ELB_logs WHERE field = 'value29';,Athena / ELB,WHERE句の条件を業務に合わせて変更,パーティションを活用し、クエリスキャン量を削減
+Athena,30,AthenaでのWAF分析ユースケース30,SELECT * FROM WAF_logs WHERE field = 'value30';,Athena / WAF,WHERE句の条件を業務に合わせて変更,パーティションを活用し、クエリスキャン量を削減
+CloudTrail,31,CloudTrail監査クエリ31,"SELECT eventTime, eventName FROM cloudtrail_logs WHERE eventName LIKE 'event31%';",CloudTrail,eventNameのフィルターは要調整,結果が多い場合はLIMIT指定で調整
+CloudTrail,32,CloudTrail監査クエリ32,"SELECT eventTime, eventName FROM cloudtrail_logs WHERE eventName LIKE 'event32%';",CloudTrail,eventNameのフィルターは要調整,結果が多い場合はLIMIT指定で調整
+CloudTrail,33,CloudTrail監査クエリ33,"SELECT eventTime, eventName FROM cloudtrail_logs WHERE eventName LIKE 'event33%';",CloudTrail,eventNameのフィルターは要調整,結果が多い場合はLIMIT指定で調整
+CloudTrail,34,CloudTrail監査クエリ34,"SELECT eventTime, eventName FROM cloudtrail_logs WHERE eventName LIKE 'event34%';",CloudTrail,eventNameのフィルターは要調整,結果が多い場合はLIMIT指定で調整
+CloudTrail,35,CloudTrail監査クエリ35,"SELECT eventTime, eventName FROM cloudtrail_logs WHERE eventName LIKE 'event35%';",CloudTrail,eventNameのフィルターは要調整,結果が多い場合はLIMIT指定で調整
+CloudTrail,36,CloudTrail監査クエリ36,"SELECT eventTime, eventName FROM cloudtrail_logs WHERE eventName LIKE 'event36%';",CloudTrail,eventNameのフィルターは要調整,結果が多い場合はLIMIT指定で調整
+CloudTrail,37,CloudTrail監査クエリ37,"SELECT eventTime, eventName FROM cloudtrail_logs WHERE eventName LIKE 'event37%';",CloudTrail,eventNameのフィルターは要調整,結果が多い場合はLIMIT指定で調整
+CloudTrail,38,CloudTrail監査クエリ38,"SELECT eventTime, eventName FROM cloudtrail_logs WHERE eventName LIKE 'event38%';",CloudTrail,eventNameのフィルターは要調整,結果が多い場合はLIMIT指定で調整
+CloudTrail,39,CloudTrail監査クエリ39,"SELECT eventTime, eventName FROM cloudtrail_logs WHERE eventName LIKE 'event39%';",CloudTrail,eventNameのフィルターは要調整,結果が多い場合はLIMIT指定で調整
+CloudTrail,40,CloudTrail監査クエリ40,"SELECT eventTime, eventName FROM cloudtrail_logs WHERE eventName LIKE 'event40%';",CloudTrail,eventNameのフィルターは要調整,結果が多い場合はLIMIT指定で調整
+CloudWatch Logs,41,CloudWatchアラート監査クエリ41,SELECT * FROM logs WHERE message LIKE '%Alert41%';,CloudWatch Logs,アラート内容に応じてLIKE句を調整,フィルタ条件を絞るとコスト削減
+CloudWatch Logs,42,CloudWatchアラート監査クエリ42,SELECT * FROM logs WHERE message LIKE '%Alert42%';,CloudWatch Logs,アラート内容に応じてLIKE句を調整,フィルタ条件を絞るとコスト削減
+CloudWatch Logs,43,CloudWatchアラート監査クエリ43,SELECT * FROM logs WHERE message LIKE '%Alert43%';,CloudWatch Logs,アラート内容に応じてLIKE句を調整,フィルタ条件を絞るとコスト削減
+CloudWatch Logs,44,CloudWatchアラート監査クエリ44,SELECT * FROM logs WHERE message LIKE '%Alert44%';,CloudWatch Logs,アラート内容に応じてLIKE句を調整,フィルタ条件を絞るとコスト削減
+CloudWatch Logs,45,CloudWatchアラート監査クエリ45,SELECT * FROM logs WHERE message LIKE '%Alert45%';,CloudWatch Logs,アラート内容に応じてLIKE句を調整,フィルタ条件を絞るとコスト削減
+Athena,46,AthenaによるWAFの詳細分析46,SELECT * FROM WAF_logs WHERE status = 'ERROR46';,Athena / WAF,status条件は要件に合わせて変更,パーティション指定とLIMITで効率的に検索
+Athena,47,Athenaによるアプリログの詳細分析47,SELECT * FROM アプリログ_logs WHERE status = 'ERROR47';,Athena / アプリログ,status条件は要件に合わせて変更,パーティション指定とLIMITで効率的に検索
+Athena,48,AthenaによるwinEventの詳細分析48,SELECT * FROM winEvent_logs WHERE status = 'ERROR48';,Athena / winEvent,status条件は要件に合わせて変更,パーティション指定とLIMITで効率的に検索
+Athena,49,AthenaによるELBの詳細分析49,SELECT * FROM ELB_logs WHERE status = 'ERROR49';,Athena / ELB,status条件は要件に合わせて変更,パーティション指定とLIMITで効率的に検索
+Athena,50,AthenaによるWAFの詳細分析50,SELECT * FROM WAF_logs WHERE status = 'ERROR50';,Athena / WAF,status条件は要件に合わせて変更,パーティション指定とLIMITで効率的に検索
+Athena,51,Athenaによるアプリログの詳細分析51,SELECT * FROM アプリログ_logs WHERE status = 'ERROR51';,Athena / アプリログ,status条件は要件に合わせて変更,パーティション指定とLIMITで効率的に検索
+Athena,52,AthenaによるwinEventの詳細分析52,SELECT * FROM winEvent_logs WHERE status = 'ERROR52';,Athena / winEvent,status条件は要件に合わせて変更,パーティション指定とLIMITで効率的に検索
+Athena,53,AthenaによるELBの詳細分析53,SELECT * FROM ELB_logs WHERE status = 'ERROR53';,Athena / ELB,status条件は要件に合わせて変更,パーティション指定とLIMITで効率的に検索
+Athena,54,AthenaによるWAFの詳細分析54,SELECT * FROM WAF_logs WHERE status = 'ERROR54';,Athena / WAF,status条件は要件に合わせて変更,パーティション指定とLIMITで効率的に検索
+Athena,55,Athenaによるアプリログの詳細分析55,SELECT * FROM アプリログ_logs WHERE status = 'ERROR55';,Athena / アプリログ,status条件は要件に合わせて変更,パーティション指定とLIMITで効率的に検索
