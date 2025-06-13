@@ -1,6 +1,54 @@
-Sub シートの順番を逆にする()
-    Dim i As Integer
-    For i = Sheets.Count To 2 Step -1
-        Sheets(i).Move Before:=Sheets(1)
+Sub シート名の数字で並べ替え()
+    Dim i As Integer, j As Integer
+    Dim tmpSheet As Worksheet
+    Dim sheetInfo() As Variant
+    Dim sheetCount As Integer
+    
+    sheetCount = Sheets.Count
+    ReDim sheetInfo(1 To sheetCount, 1 To 2)
+    
+    ' シート名と数字を格納
+    For i = 1 To sheetCount
+        With Sheets(i)
+            sheetInfo(i, 1) = .Name
+            sheetInfo(i, 2) = GetNumberFromSheetName(.Name)
+        End With
+    Next i
+    
+    ' バブルソートで並び替え（昇順）
+    For i = 1 To sheetCount - 1
+        For j = i + 1 To sheetCount
+            If sheetInfo(i, 2) > sheetInfo(j, 2) Then
+                ' 並び替え
+                Dim tmp1 As Variant, tmp2 As Variant
+                tmp1 = sheetInfo(i, 1)
+                tmp2 = sheetInfo(i, 2)
+                sheetInfo(i, 1) = sheetInfo(j, 1)
+                sheetInfo(i, 2) = sheetInfo(j, 2)
+                sheetInfo(j, 1) = tmp1
+                sheetInfo(j, 2) = tmp2
+            End If
+        Next j
+    Next i
+
+    ' シートを並び替え
+    For i = sheetCount To 1 Step -1
+        Sheets(sheetInfo(i, 1)).Move Before:=Sheets(1)
     Next i
 End Sub
+
+' ヘルパー関数：シート名から数字を抽出
+Function GetNumberFromSheetName(sheetName As String) As Long
+    Dim regex As Object
+    Set regex = CreateObject("VBScript.RegExp")
+    
+    With regex
+        .Pattern = "\d+"
+        .Global = False
+        If .Test(sheetName) Then
+            GetNumberFromSheetName = CLng(.Execute(sheetName)(0))
+        Else
+            GetNumberFromSheetName = 0
+        End If
+    End With
+End Function
