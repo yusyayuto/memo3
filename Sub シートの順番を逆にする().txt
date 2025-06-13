@@ -1,52 +1,31 @@
-Sub シート名の括弧内の数字で並び替え()
-    Dim i As Integer, j As Integer
-    Dim sheetCount As Integer
-    Dim sheetInfo() As Variant
+Sub シートのタブ色を条件で変更する()
+    Dim ws As Worksheet
+    Dim cell As Range
+    Dim foundRed As Boolean
+    Dim foundYellow As Boolean
 
-    sheetCount = Sheets.Count
-    ReDim sheetInfo(1 To sheetCount, 1 To 2)
+    For Each ws In ThisWorkbook.Worksheets
+        foundRed = False
+        foundYellow = False
 
-    ' シート名と括弧内の数字を取得
-    For i = 1 To sheetCount
-        With Sheets(i)
-            sheetInfo(i, 1) = .Name
-            sheetInfo(i, 2) = GetNumberFromParentheses(.Name)
-        End With
-    Next i
-
-    ' 昇順でバブルソート
-    For i = 1 To sheetCount - 1
-        For j = i + 1 To sheetCount
-            If sheetInfo(i, 2) > sheetInfo(j, 2) Then
-                Dim tmp1 As Variant, tmp2 As Variant
-                tmp1 = sheetInfo(i, 1)
-                tmp2 = sheetInfo(i, 2)
-                sheetInfo(i, 1) = sheetInfo(j, 1)
-                sheetInfo(i, 2) = sheetInfo(j, 2)
-                sheetInfo(j, 1) = tmp1
-                sheetInfo(j, 2) = tmp2
+        ' 1行目（A1～Z1）をスキャン（必要に応じて範囲拡大可）
+        For Each cell In ws.Range("A1:Z1")
+            If Not IsEmpty(cell.Value) Then
+                If InStr(cell.Value, "赤") > 0 Then
+                    foundRed = True
+                ElseIf InStr(cell.Value, "黄") > 0 Then
+                    foundYellow = True
+                End If
             End If
-        Next j
-    Next i
+        Next cell
 
-    ' 並び替え実行
-    For i = sheetCount To 1 Step -1
-        Sheets(sheetInfo(i, 1)).Move Before:=Sheets(1)
-    Next i
-End Sub
-
-' 括弧内の数字を抽出（全角・半角どちらも対応）
-Function GetNumberFromParentheses(sheetName As String) As Long
-    Dim regex As Object
-    Set regex = CreateObject("VBScript.RegExp")
-
-    With regex
-        .Pattern = "[\(\（](\d+)[\)\）]"
-        .Global = False
-        If .Test(sheetName) Then
-            GetNumberFromParentheses = CLng(.Execute(sheetName)(0).SubMatches(0))
+        ' タブ色設定（赤が優先）
+        If foundRed Then
+            ws.Tab.Color = RGB(255, 0, 0)    ' 赤
+        ElseIf foundYellow Then
+            ws.Tab.Color = RGB(255, 255, 0)  ' 黄
         Else
-            GetNumberFromParentheses = 0
+            ws.Tab.ColorIndex = xlColorIndexNone ' 色なしにしたい場合はこれ
         End If
-    End With
-End Function
+    Next ws
+End Sub
