@@ -1,0 +1,121 @@
+Sub CheckSheetNames()
+    '========================================
+    ' シート名チェック診断マクロ
+    ' 機能：開いている全ファイルのシート名と色を確認
+    ' 目的：マージ処理前の問題特定
+    '========================================
+    
+    Dim wb As Workbook
+    Dim ws As Worksheet
+    Dim result As String
+    Dim redCount As Integer, yellowCount As Integer, otherCount As Integer
+    
+    result = "【全ファイルのシート名・色チェック】" & vbNewLine & vbNewLine
+    
+    ' 各ファイルをチェック
+    For Each wb In Workbooks
+        If wb.Name <> ThisWorkbook.Name Then
+            result = result & "ファイル: " & wb.Name & vbNewLine
+            result = result & "--------------------------------" & vbNewLine
+            
+            For Each ws In wb.Worksheets
+                result = result & "シート名: 「" & ws.Name & "」 → "
+                
+                ' 色をチェック
+                If ws.Tab.Color = RGB(255, 0, 0) Then
+                    result = result & "🔴 赤色"
+                    redCount = redCount + 1
+                ElseIf ws.Tab.Color = RGB(255, 255, 0) Then
+                    result = result & "🟡 黄色"
+                    yellowCount = yellowCount + 1
+                ElseIf ws.Tab.Color = RGB(0, 176, 80) Then
+                    result = result & "🟢 緑色"
+                    otherCount = otherCount + 1
+                ElseIf ws.Tab.Color = RGB(166, 166, 166) Or ws.Tab.Color = RGB(128, 128, 128) Then
+                    result = result & "⚪ グレー"
+                    otherCount = otherCount + 1
+                Else
+                    result = result & "❓ その他 (Color値: " & ws.Tab.Color & ")"
+                    otherCount = otherCount + 1
+                End If
+                
+                ' 特殊文字チェック
+                If InStr(ws.Name, "/") > 0 Or InStr(ws.Name, "\") > 0 Or _
+                   InStr(ws.Name, "*") > 0 Or InStr(ws.Name, "?") > 0 Or _
+                   InStr(ws.Name, "[") > 0 Or InStr(ws.Name, "]") > 0 Or _
+                   InStr(ws.Name, ":") > 0 Then
+                    result = result & " ⚠️特殊文字あり"
+                End If
+                
+                result = result & vbNewLine
+            Next ws
+            result = result & vbNewLine
+        End If
+    Next wb
+    
+    ' サマリー
+    result = result & "【集計結果】" & vbNewLine
+    result = result & "🔴 赤色シート: " & redCount & "個" & vbNewLine
+    result = result & "🟡 黄色シート: " & yellowCount & "個" & vbNewLine
+    result = result & "⚪ その他シート: " & otherCount & "個" & vbNewLine
+    result = result & vbNewLine
+    result = result & "マージ対象: " & (redCount + yellowCount) & "個のシート"
+    
+    ' 結果表示（長い場合は分割）
+    If Len(result) > 1000 Then
+        ' 結果が長い場合は最初の部分のみ表示
+        MsgBox Left(result, 1000) & vbNewLine & vbNewLine & "（結果が長いため一部省略）", vbInformation, "シート名チェック結果"
+        
+        ' 詳細をイミディエイトウィンドウに出力（デバッグ用）
+        Debug.Print result
+        MsgBox "詳細結果はVBエディタの「イミディエイトウィンドウ」に出力されました。" & vbNewLine & _
+               "表示方法: VBエディタ（Alt+F11）→ 表示 → イミディエイトウィンドウ", vbInformation
+    Else
+        MsgBox result, vbInformation, "シート名チェック結果"
+    End If
+End Sub
+
+'========================================
+' 特殊文字修正マクロ（オプション）
+'========================================
+Sub FixSheetNames()
+    '危険な特殊文字を安全な文字に置換
+    Dim wb As Workbook
+    Dim ws As Worksheet
+    Dim oldName As String, newName As String
+    Dim fixCount As Integer
+    
+    If MsgBox("シート名の特殊文字を修正しますか？" & vbNewLine & _
+              "（/ \ * ? [ ] : を _ に置換）", vbYesNo + vbQuestion, "確認") = vbNo Then
+        Exit Sub
+    End If
+    
+    For Each wb In Workbooks
+        If wb.Name <> ThisWorkbook.Name Then
+            For Each ws In wb.Worksheets
+                oldName = ws.Name
+                newName = oldName
+                
+                ' 特殊文字を置換
+                newName = Replace(newName, "/", "_")
+                newName = Replace(newName, "\", "_")
+                newName = Replace(newName, "*", "_")
+                newName = Replace(newName, "?", "_")
+                newName = Replace(newName, "[", "_")
+                newName = Replace(newName, "]", "_")
+                newName = Replace(newName, ":", "_")
+                
+                If oldName <> newName Then
+                    On Error Resume Next
+                    ws.Name = newName
+                    If Err.Number = 0 Then
+                        fixCount = fixCount + 1
+                    End If
+                    On Error GoTo 0
+                End If
+            Next ws
+        End If
+    Next wb
+    
+    MsgBox "修正完了: " & fixCount & "個のシート名を修正しました。", vbInformation
+End Sub
