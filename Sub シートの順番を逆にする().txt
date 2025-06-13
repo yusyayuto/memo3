@@ -1,25 +1,23 @@
-Sub シート名の数字で並べ替え()
+Sub シート名の括弧内の数字で並び替え()
     Dim i As Integer, j As Integer
-    Dim tmpSheet As Worksheet
-    Dim sheetInfo() As Variant
     Dim sheetCount As Integer
-    
+    Dim sheetInfo() As Variant
+
     sheetCount = Sheets.Count
     ReDim sheetInfo(1 To sheetCount, 1 To 2)
-    
-    ' シート名と数字を格納
+
+    ' シート名と括弧内の数字を取得
     For i = 1 To sheetCount
         With Sheets(i)
             sheetInfo(i, 1) = .Name
-            sheetInfo(i, 2) = GetNumberFromSheetName(.Name)
+            sheetInfo(i, 2) = GetNumberFromParentheses(.Name)
         End With
     Next i
-    
-    ' バブルソートで並び替え（昇順）
+
+    ' 昇順でバブルソート
     For i = 1 To sheetCount - 1
         For j = i + 1 To sheetCount
             If sheetInfo(i, 2) > sheetInfo(j, 2) Then
-                ' 並び替え
                 Dim tmp1 As Variant, tmp2 As Variant
                 tmp1 = sheetInfo(i, 1)
                 tmp2 = sheetInfo(i, 2)
@@ -31,24 +29,24 @@ Sub シート名の数字で並べ替え()
         Next j
     Next i
 
-    ' シートを並び替え
+    ' 並び替え実行
     For i = sheetCount To 1 Step -1
         Sheets(sheetInfo(i, 1)).Move Before:=Sheets(1)
     Next i
 End Sub
 
-' ヘルパー関数：シート名から数字を抽出
-Function GetNumberFromSheetName(sheetName As String) As Long
+' 括弧内の数字を抽出（全角・半角どちらも対応）
+Function GetNumberFromParentheses(sheetName As String) As Long
     Dim regex As Object
     Set regex = CreateObject("VBScript.RegExp")
-    
+
     With regex
-        .Pattern = "\d+"
+        .Pattern = "[\(\（](\d+)[\)\）]"
         .Global = False
         If .Test(sheetName) Then
-            GetNumberFromSheetName = CLng(.Execute(sheetName)(0))
+            GetNumberFromParentheses = CLng(.Execute(sheetName)(0).SubMatches(0))
         Else
-            GetNumberFromSheetName = 0
+            GetNumberFromParentheses = 0
         End If
     End With
 End Function
