@@ -1,0 +1,97 @@
+Sub ApplyFormattingToExistingSheets()
+    '========================================
+    ' 既存マージファイル用書式設定
+    ' 4つの要求を一括適用：順序・列幅・フォント・太字
+    '========================================
+    
+    Dim response As Integer
+    Dim ws As Worksheet
+    Dim startTime As Double
+    
+    ' 確認ダイアログ
+    response = MsgBox("現在のワークブックの全シートに以下の書式を適用しますか？" & vbNewLine & vbNewLine & _
+                      "✓ シート順序: 正順に修正（1,2,3...順）" & vbNewLine & _
+                      "✓ 列幅: 11.6に統一" & vbNewLine & _
+                      "✓ フォント: Courier New" & vbNewLine & _
+                      "✓ 太字: 2,3,4,5,6,7,8,9,11行目", _
+                      vbYesNo + vbQuestion, "書式適用確認")
+    
+    If response = vbNo Then Exit Sub
+    
+    startTime = Timer
+    
+    ' パフォーマンス最適化
+    Application.ScreenUpdating = False
+    Application.Calculation = xlCalculationManual
+    Application.EnableEvents = False
+    
+    ' 1. 各シートに書式適用
+    For Each ws In ThisWorkbook.Worksheets
+        If ws.Type = xlWorksheet Then
+            Call FormatSingleSheet(ws)
+        End If
+    Next ws
+    
+    ' 2. シート順序修正（逆順→正順）
+    Call CorrectSheetOrder
+    
+    ' 設定復元
+    Application.ScreenUpdating = True
+    Application.Calculation = xlCalculationAutomatic
+    Application.EnableEvents = True
+    
+    ' 完了報告
+    MsgBox "書式適用完了！" & vbNewLine & _
+           "処理時間: " & Format(Timer - startTime, "0.0") & "秒" & vbNewLine & _
+           "対象シート数: " & ThisWorkbook.Worksheets.Count & "個", vbInformation, "完了"
+End Sub
+
+'========================================
+' 単一シート書式設定
+'========================================
+Private Sub FormatSingleSheet(ws As Worksheet)
+    On Error Resume Next
+    
+    With ws
+        ' 列幅を11.6に統一
+        .Columns.ColumnWidth = 11.6
+        
+        ' フォントをCourier Newに変更
+        .Cells.Font.Name = "Courier New"
+        
+        ' 特定行を太字に設定（2,3,4,5,6,7,8,9,11行目）
+        .Rows(2).Font.Bold = True
+        .Rows(3).Font.Bold = True
+        .Rows(4).Font.Bold = True
+        .Rows(5).Font.Bold = True
+        .Rows(6).Font.Bold = True
+        .Rows(7).Font.Bold = True
+        .Rows(8).Font.Bold = True
+        .Rows(9).Font.Bold = True
+        .Rows(11).Font.Bold = True
+        
+        ' ヘッダー行（1行目）の追加書式
+        .Rows(1).Font.Bold = True
+        .Rows(1).HorizontalAlignment = xlCenter
+    End With
+    
+    On Error GoTo 0
+End Sub
+
+'========================================
+' シート順序修正（逆順→正順）
+'========================================
+Private Sub CorrectSheetOrder()
+    Dim totalSheets As Long
+    Dim i As Long
+    
+    totalSheets = ThisWorkbook.Worksheets.Count
+    
+    ' シートが2つ以上ある場合のみ実行
+    If totalSheets < 2 Then Exit Sub
+    
+    ' 逆順を正順に修正（最初のシートを末尾に移動を繰り返し）
+    For i = 1 To totalSheets - 1
+        ThisWorkbook.Worksheets(1).Move After:=ThisWorkbook.Worksheets(totalSheets)
+    Next i
+End Sub
