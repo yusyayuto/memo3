@@ -1,0 +1,199 @@
+Sub SimpleFinalMerge()
+    '========================================
+    ' シンプル確実版：最終マージ
+    ' 赤色=255, 黄色=65535で固定検出
+    ' 最小限のコードで確実に動作
+    '========================================
+    
+    Dim sourceFiles(1 To 5) As Workbook
+    Dim customNames(1 To 5) As String
+    Dim newWB As Workbook
+    Dim wb As Workbook
+    Dim ws As Worksheet
+    Dim i As Long
+    Dim fileCount As Long
+    
+    ' カスタム名を直接設定
+    customNames(1) = "足立本番"
+    customNames(2) = "足立検証"
+    customNames(3) = "杉並運用"
+    customNames(4) = "杉並本番"
+    customNames(5) = "杉並検証"
+    
+    ' 開いているファイルを自動で割り当て
+    fileCount = 0
+    For Each wb In Workbooks
+        If wb.Name <> ThisWorkbook.Name Then
+            fileCount = fileCount + 1
+            If fileCount <= 5 Then
+                Set sourceFiles(fileCount) = wb
+            End If
+        End If
+    Next wb
+    
+    If fileCount < 5 Then
+        MsgBox "5つのファイルが見つかりません。", vbExclamation
+        Exit Sub
+    End If
+    
+    ' 確認
+    Dim confirmMsg As String
+    confirmMsg = "以下の順序でマージします：" & vbNewLine
+    For i = 1 To 5
+        confirmMsg = confirmMsg & i & ". " & customNames(i) & " ← " & sourceFiles(i).Name & vbNewLine
+    Next i
+    
+    If MsgBox(confirmMsg & vbNewLine & "実行しますか？", vbYesNo + vbQuestion) = vbNo Then
+        Exit Sub
+    End If
+    
+    ' 新ワークブック作成
+    Set newWB = Workbooks.Add
+    
+    ' 最適化
+    Application.ScreenUpdating = False
+    Application.Calculation = xlCalculationManual
+    
+    ' 1番目のファイルの順序でシート処理
+    Dim processedCount As Long
+    For Each ws In sourceFiles(1).Worksheets
+        ' 赤・黄色シートがあるかチェック
+        If HasRedOrYellowSheet(sourceFiles, ws.Name) Then
+            Call CreateSimpleMergedSheet(newWB, ws.Name, sourceFiles, customNames)
+            processedCount = processedCount + 1
+            
+            ' 進捗表示
+            If processedCount Mod 50 = 0 Then
+                Application.StatusBar = "処理中... " & processedCount & "シート完了"
+            End If
+        End If
+    Next ws
+    
+    ' デフォルトシート削除
+    Application.DisplayAlerts = False
+    If newWB.Worksheets.Count > processedCount Then
+        For i = newWB.Worksheets.Count To 1 Step -1
+            If newWB.Worksheets(i).Name = "Sheet1" Or newWB.Worksheets(i).Name = "シート1" Then
+                newWB.Worksheets(i).Delete
+                Exit For
+            End If
+        Next i
+    End If
+    Application.DisplayAlerts = True
+    
+    ' 環境復元
+    Application.ScreenUpdating = True
+    Application.Calculation = xlCalculationAutomatic
+    Application.StatusBar = False
+    
+    MsgBox "マージ完了！作成シート数: " & processedCount, vbInformation
+    newWB.Activate
+End Sub
+
+'========================================
+' 赤・黄色シート存在チェック
+'========================================
+Private Function HasRedOrYellowSheet(sourceFiles() As Workbook, sheetName As String) As Boolean
+    Dim i As Long
+    Dim ws As Worksheet
+    
+    For i = 1 To 5
+        Set ws = Nothing
+        On Error Resume Next
+        Set ws = sourceFiles(i).Worksheets(sheetName)
+        On Error GoTo 0
+        
+        If Not ws Is Nothing Then
+            ' 赤色=255, 黄色=65535
+            If ws.Tab.Color = 255 Or ws.Tab.Color = 65535 Then
+                HasRedOrYellowSheet = True
+                Exit Function
+            End If
+        End If
+    Next i
+    
+    HasRedOrYellowSheet = False
+End Function
+
+'========================================
+' シンプルマージシート作成
+'========================================
+Private Sub CreateSimpleMergedSheet(newWB As Workbook, sheetName As String, sourceFiles() As Workbook, customNames() As String)
+    Dim newSheet As Worksheet
+    Dim ws As Worksheet
+    Dim currentCol As Long
+    Dim i As Long
+    
+    ' 新シート作成
+    Set newSheet = newWB.Worksheets.Add
+    newSheet.Name = sheetName
+    currentCol = 1
+    
+    ' 各ファイルをチェック
+    For i = 1 To 5
+        Set ws = Nothing
+        On Error Resume Next
+        Set ws = sourceFiles(i).Worksheets(sheetName)
+        On Error GoTo 0
+        
+        If Not ws Is Nothing Then
+            ' 赤色または黄色の場合
+            If ws.Tab.Color = 255 Or ws.Tab.Color = 65535 Then
+                
+                ' 色名
+                Dim colorName As String
+                If ws.Tab.Color = 255 Then
+                    colorName = "赤"
+                Else
+                    colorName = "黄"
+                End If
+                
+                ' ヘッダー
+                With newSheet.Cells(1, currentCol)
+                    .Value = customNames(i) & "(" & colorName & ")"
+                    .Font.Bold = True
+                    .Interior.Color = ws.Tab.Color
+                    .Font.Color = IIf(colorName = "黄", vbBlack, vbWhite)
+                End With
+                
+                ' データコピー
+                If ws.UsedRange.Rows.Count > 0 Then
+                    ws.UsedRange.Copy
+                    newSheet.Cells(2, currentCol).PasteSpecial xlPasteValues
+                    Application.CutCopyMode = False
+                    
+                    currentCol = currentCol + ws.UsedRange.Columns.Count + 1
+                End If
+            End If
+        End If
+    Next i
+    
+    ' 書式適用
+    Call ApplySimpleFormatting(newSheet)
+End Sub
+
+'========================================
+' シンプル書式適用
+'========================================
+Private Sub ApplySimpleFormatting(ws As Worksheet)
+    ' 列幅11.6
+    ws.Columns.ColumnWidth = 11.6
+    
+    ' フォントCourier New
+    ws.Cells.Font.Name = "Courier New"
+    
+    ' 太字行（2,3,4,5,6,7,8,9,11）
+    ws.Rows(2).Font.Bold = True
+    ws.Rows(3).Font.Bold = True
+    ws.Rows(4).Font.Bold = True
+    ws.Rows(5).Font.Bold = True
+    ws.Rows(6).Font.Bold = True
+    ws.Rows(7).Font.Bold = True
+    ws.Rows(8).Font.Bold = True
+    ws.Rows(9).Font.Bold = True
+    ws.Rows(11).Font.Bold = True
+    
+    ' ヘッダー行
+    ws.Rows(1).Font.Bold = True
+    ws.Rows(1).HorizontalAlignment = xlCenter
+End Sub
