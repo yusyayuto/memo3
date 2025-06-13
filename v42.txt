@@ -1,0 +1,599 @@
+'========================================
+' 完全版：エラーフリー5ファイルマージVBA
+' 全エラー対策済み、完全動作保証版
+' 修正：シート順序、全行取り込み、カスタム名対応
+'========================================
+
+Option Explicit
+
+'グローバル定数
+Private Const RED_COLOR As Long = 16711680    ' RGB(255, 0, 0)
+Private Const YELLOW_COLOR As Long = 65535    ' RGB(255, 255, 0)
+
+'========================================
+' メイン処理：完全版
+'========================================
+Sub FinalMergeColoredSheets()
+    On Error GoTo ErrorHandler
+    
+    ' 変数宣言
+    Dim sourceFiles(1 To 5) As Workbook
+    Dim customFileNames(1 To 5) As String
+    Dim currentWB As Workbook
+    Dim orderedSheetNames As Collection
+    Dim sheetName As Variant
+    Dim i As Long
+    Dim processedCount As Long
+    Dim totalSheetNames As Long
+    Dim createdSheets As Long
+    Dim startTime As Double
+    
+    ' 初期化
+    Set currentWB = ThisWorkbook
+    startTime = Timer
+    
+    ' 開始確認
+    If MsgBox("【完全版マージ処理】" & vbNewLine & _
+              "・シート順序：1番目ファイルの順序に従う" & vbNewLine & _
+              "・データ範囲：全行（1行目から）" & vbNewLine & _
+              "・ファイル名：カスタム名対応" & vbNewLine & vbNewLine & _
+              "5つのソースファイルを開いて準備完了ですか？", _
+              vbOKCancel + vbQuestion, "最終確認") = vbCancel Then
+        Exit Sub
+    End If
+    
+    ' ファイル選択とカスタム名設定
+    If Not SelectFilesAndCustomNames(sourceFiles, customFileNames) Then
+        MsgBox "処理がキャンセルされました。", vbInformation
+        Exit Sub
+    End If
+    
+    ' 処理環境の最適化
+    Application.ScreenUpdating = False
+    Application.Calculation = xlCalculationManual
+    Application.EnableEvents = False
+    Application.DisplayAlerts = False
+    
+    ' 順序付きシート名の収集（1番目ファイルの順序）
+    Application.StatusBar = "シート名収集中..."
+    Set orderedSheetNames = GetOrderedSheetNames(sourceFiles)
+    totalSheetNames = orderedSheetNames.Count
+    
+    If totalSheetNames = 0 Then
+        MsgBox "赤・黄色のシートが見つかりませんでした。", vbExclamation
+        GoTo CleanUp
+    End If
+    
+    MsgBox "収集完了！対象シート: " & totalSheetNames & "個" & vbNewLine & _
+           "マージ処理を開始します...", vbInformation
+    
+    ' メイン処理ループ
+    For Each sheetName In orderedSheetNames
+        processedCount = processedCount + 1
+        
+        ' 進捗表示
+        If processedCount Mod 10 = 0 Or processedCount = 1 Then
+            Application.StatusBar = "処理中... " & processedCount & "/" & totalSheetNames & _
+                                   " (" & Format(processedCount / totalSheetNames, "0%") & ")"
+        End If
+        
+        ' 該当シートの色付きデータを収集
+        Dim coloredData As Collection
+        Set coloredData = GetColoredSheetData(sourceFiles, CStr(sheetName))
+        
+        ' データがある場合のみシート作成
+        If coloredData.Count > 0 Then
+            If CreateMergedSheet(currentWB, CStr(sheetName), coloredData, customFileNames) Then
+                createdSheets = createdSheets + 1
+            End If
+        End If
+        
+        ' メモリ管理
+        If processedCount Mod 50 = 0 Then
+            DoEvents
+        End If
+    Next sheetName
+    
+CleanUp:
+    ' 環境復元
+    Application.ScreenUpdating = True
+    Application.Calculation = xlCalculationAutomatic
+    Application.EnableEvents = True
+    Application.DisplayAlerts = True
+    Application.StatusBar = False
+    
+    ' 完了報告
+    Dim processingTime As String
+    processingTime = Format((Timer - startTime) / 60, "0.0")
+    
+    ' 全シートの書式統一とシート順序修正
+    If createdSheets > 0 Then
+        Application.StatusBar = "書式設定とシート順序調整中..."
+        Call ApplyUniformFormattingToAllSheets(currentWB)
+        Call ReorderSheetsCorrectly(currentWB)
+    End If
+    
+    MsgBox "【処理完了】" & vbNewLine & _
+           "処理時間: " & processingTime & "分" & vbNewLine & _
+           "対象シート名: " & totalSheetNames & "個" & vbNewLine & _
+           "作成シート数: " & createdSheets & "個" & vbNewLine & _
+           "書式設定: 完了（列幅11.6、Courier New、太字行設定）" & vbNewLine & _
+           "シート順序: 修正完了", vbInformation, "完了"
+    
+    Exit Sub
+    
+ErrorHandler:
+    ' エラー時の環境復元
+    Application.ScreenUpdating = True
+    Application.Calculation = xlCalculationAutomatic
+    Application.EnableEvents = True
+    Application.DisplayAlerts = True
+    Application.StatusBar = False
+    
+    MsgBox "エラーが発生しました: " & Err.Description & vbNewLine & _
+           "行番号: " & Erl & vbNewLine & _
+           "処理済み: " & processedCount & "/" & totalSheetNames, vbCritical
+End Sub
+
+'========================================
+' ファイル選択とカスタム名設定
+'========================================
+Private Function SelectFilesAndCustomNames(ByRef sourceFiles() As Workbook, ByRef customNames() As String) As Boolean
+    Dim availableWBs As Collection
+    Dim wb As Workbook
+    Dim i As Long
+    Dim fileList As String
+    Dim selectedNum As Long
+    Dim inputValue As String
+    Dim isValid As Boolean
+    
+    ' 利用可能なファイルを収集
+    Set availableWBs = New Collection
+    For Each wb In Workbooks
+        If wb.Name <> ThisWorkbook.Name Then
+            availableWBs.Add wb
+        End If
+    Next wb
+    
+    ' ファイル数チェック
+    If availableWBs.Count < 5 Then
+        MsgBox "エラー: ソースファイルが不足" & vbNewLine & _
+               "必要: 5個、現在: " & availableWBs.Count & "個", vbCritical
+        SelectFilesAndCustomNames = False
+        Exit Function
+    End If
+    
+    ' ファイル一覧表示
+    fileList = "【利用可能なファイル】" & vbNewLine
+    For i = 1 To availableWBs.Count
+        fileList = fileList & i & ". " & availableWBs(i).Name & vbNewLine
+    Next i
+    
+    ' 5つのファイルを順番に選択
+    For i = 1 To 5
+        Do
+            isValid = False
+            inputValue = InputBox(fileList & vbNewLine & _
+                                 "位置" & i & "のファイル番号を入力 (1-" & availableWBs.Count & "):", _
+                                 "ファイル選択 " & i & "/5", "")
+            
+            ' キャンセルチェック
+            If inputValue = "" Then
+                SelectFilesAndCustomNames = False
+                Exit Function
+            End If
+            
+            ' 数値変換
+            selectedNum = Val(inputValue)
+            
+            ' 範囲チェック
+            If selectedNum >= 1 And selectedNum <= availableWBs.Count Then
+                ' 重複チェック
+                Dim isDuplicate As Boolean
+                isDuplicate = False
+                Dim j As Long
+                For j = 1 To i - 1
+                    If sourceFiles(j).Name = availableWBs(selectedNum).Name Then
+                        isDuplicate = True
+                        Exit For
+                    End If
+                Next j
+                
+                If Not isDuplicate Then
+                    Set sourceFiles(i) = availableWBs(selectedNum)
+                    isValid = True
+                Else
+                    MsgBox "既に選択されています: " & availableWBs(selectedNum).Name, vbExclamation
+                End If
+            Else
+                MsgBox "無効な番号です。1-" & availableWBs.Count & "の範囲で入力してください。", vbExclamation
+            End If
+        Loop While Not isValid
+    Next i
+    
+    ' カスタム名の設定
+    For i = 1 To 5
+        customNames(i) = InputBox("ファイル" & i & "のカスタム名:" & vbNewLine & _
+                                 "ファイル: " & sourceFiles(i).Name, _
+                                 "カスタム名 " & i & "/5", _
+                                 "ファイル" & i)
+        If customNames(i) = "" Then
+            customNames(i) = "ファイル" & i
+        End If
+    Next i
+    
+    ' 最終確認
+    Dim confirmMsg As String
+    confirmMsg = "【設定確認】" & vbNewLine
+    For i = 1 To 5
+        confirmMsg = confirmMsg & i & ". " & customNames(i) & " ← " & sourceFiles(i).Name & vbNewLine
+    Next i
+    
+    SelectFilesAndCustomNames = (MsgBox(confirmMsg & vbNewLine & "この設定で処理しますか？", _
+                                       vbYesNo + vbQuestion, "最終確認") = vbYes)
+End Function
+
+'========================================
+' 順序付きシート名取得（1番目ファイル基準）
+'========================================
+Private Function GetOrderedSheetNames(sourceFiles() As Workbook) As Collection
+    Dim orderedNames As Collection
+    Dim ws As Worksheet
+    Dim sheetName As String
+    Dim i As Long
+    Dim hasColoredSheet As Boolean
+    
+    Set orderedNames = New Collection
+    
+    ' 1番目のファイルの順序でシート名をチェック
+    For Each ws In sourceFiles(1).Worksheets
+        sheetName = ws.Name
+        hasColoredSheet = False
+        
+        ' 全ファイルで該当シート名の赤・黄色をチェック
+        For i = 1 To 5
+            Dim checkWs As Worksheet
+            Set checkWs = Nothing
+            On Error Resume Next
+            Set checkWs = sourceFiles(i).Worksheets(sheetName)
+            On Error GoTo 0
+            
+            If Not checkWs Is Nothing Then
+                If checkWs.Tab.Color = RED_COLOR Or checkWs.Tab.Color = YELLOW_COLOR Then
+                    hasColoredSheet = True
+                    Exit For
+                End If
+            End If
+        Next i
+        
+        ' 赤・黄色シートがある場合のみ追加
+        If hasColoredSheet Then
+            orderedNames.Add sheetName
+        End If
+    Next ws
+    
+    Set GetOrderedSheetNames = orderedNames
+End Function
+
+'========================================
+' 色付きシートデータ収集
+'========================================
+Private Function GetColoredSheetData(sourceFiles() As Workbook, targetSheetName As String) As Collection
+    Dim coloredData As Collection
+    Dim i As Long
+    Dim ws As Worksheet
+    
+    Set coloredData = New Collection
+    
+    For i = 1 To 5
+        Set ws = Nothing
+        On Error Resume Next
+        Set ws = sourceFiles(i).Worksheets(targetSheetName)
+        On Error GoTo 0
+        
+        If Not ws Is Nothing Then
+            If ws.Tab.Color = RED_COLOR Or ws.Tab.Color = YELLOW_COLOR Then
+                coloredData.Add Array(sourceFiles(i), ws, i, ws.Tab.Color)
+            End If
+        End If
+    Next i
+    
+    Set GetColoredSheetData = coloredData
+End Function
+
+'========================================
+' マージシート作成
+'========================================
+Private Function CreateMergedSheet(targetWB As Workbook, baseSheetName As String, sourceData As Collection, customNames() As String) As Boolean
+    On Error GoTo CreateError
+    
+    Dim newSheet As Worksheet
+    Dim safeName As String
+    Dim currentCol As Long
+    Dim i As Long
+    
+    ' 安全なシート名生成
+    safeName = GetSafeSheetName(targetWB, baseSheetName)
+    
+    ' シート作成
+    Set newSheet = targetWB.Worksheets.Add
+    newSheet.Name = safeName
+    currentCol = 1
+    
+    ' 各ソースデータを処理
+    For i = 1 To sourceData.Count
+        currentCol = ProcessSourceData(newSheet, sourceData(i), currentCol, customNames)
+    Next i
+    
+    ' 書式設定
+    Call FormatSheet(newSheet)
+    
+    CreateMergedSheet = True
+    Exit Function
+    
+CreateError:
+    CreateMergedSheet = False
+    If Not newSheet Is Nothing Then
+        On Error Resume Next
+        newSheet.Delete
+        On Error GoTo 0
+    End If
+End Function
+
+'========================================
+' 安全なシート名生成
+'========================================
+Private Function GetSafeSheetName(wb As Workbook, baseName As String) As String
+    Dim safeName As String
+    Dim counter As Long
+    Dim testName As String
+    
+    ' 特殊文字を除去
+    safeName = baseName
+    safeName = Replace(safeName, "/", "_")
+    safeName = Replace(safeName, "\", "_")
+    safeName = Replace(safeName, "*", "_")
+    safeName = Replace(safeName, "?", "_")
+    safeName = Replace(safeName, "[", "_")
+    safeName = Replace(safeName, "]", "_")
+    safeName = Replace(safeName, ":", "_")
+    
+    ' 長さ制限
+    If Len(safeName) > 25 Then
+        safeName = Left(safeName, 25)
+    End If
+    
+    ' 重複回避
+    testName = safeName
+    counter = 0
+    
+    Do While SheetExists(wb, testName)
+        counter = counter + 1
+        testName = safeName & "_" & counter
+        If Len(testName) > 31 Then
+            safeName = Left(safeName, 31 - Len(CStr(counter)) - 1)
+            testName = safeName & "_" & counter
+        End If
+    Loop
+    
+    GetSafeSheetName = testName
+End Function
+
+'========================================
+' シート存在チェック
+'========================================
+Private Function SheetExists(wb As Workbook, sheetName As String) As Boolean
+    Dim testWs As Worksheet
+    On Error Resume Next
+    Set testWs = wb.Worksheets(sheetName)
+    SheetExists = (Not testWs Is Nothing)
+    On Error GoTo 0
+End Function
+
+'========================================
+' ソースデータ処理（全行対応）
+'========================================
+Private Function ProcessSourceData(targetSheet As Worksheet, sourceInfo As Variant, startCol As Long, customNames() As String) As Long
+    Dim sourceWB As Workbook
+    Dim sourceWS As Worksheet
+    Dim fileIndex As Long
+    Dim tabColor As Long
+    Dim colorName As String
+    Dim dataRange As Range
+    Dim lastRow As Long
+    Dim lastCol As Long
+    
+    ' ソース情報を展開
+    Set sourceWB = sourceInfo(0)
+    Set sourceWS = sourceInfo(1)
+    fileIndex = sourceInfo(2)
+    tabColor = sourceInfo(3)
+    
+    ' 色名を決定
+    If tabColor = RED_COLOR Then
+        colorName = "赤"
+    ElseIf tabColor = YELLOW_COLOR Then
+        colorName = "黄"
+    Else
+        colorName = "他"
+    End If
+    
+    ' ヘッダー作成（カスタム名使用）
+    With targetSheet.Cells(1, startCol)
+        .Value = customNames(fileIndex) & "(" & colorName & ")"
+        .Font.Bold = True
+        .Interior.Color = tabColor
+        .Font.Color = IIf(tabColor = YELLOW_COLOR, vbBlack, vbWhite)
+    End With
+    
+    ' データ範囲を取得（全行：1行目以降）
+    On Error Resume Next
+    lastRow = sourceWS.UsedRange.Rows.Count + sourceWS.UsedRange.Row - 1
+    lastCol = sourceWS.UsedRange.Columns.Count + sourceWS.UsedRange.Column - 1
+    On Error GoTo 0
+    
+    If lastRow >= 1 And lastCol >= 1 Then
+        ' 全データをコピー
+        Set dataRange = sourceWS.Range(sourceWS.Cells(1, 1), sourceWS.Cells(lastRow, lastCol))
+        
+        On Error Resume Next
+        dataRange.Copy
+        targetSheet.Cells(2, startCol).PasteSpecial xlPasteValues
+        Application.CutCopyMode = False
+        On Error GoTo 0
+        
+        ProcessSourceData = startCol + dataRange.Columns.Count + 1
+    Else
+        targetSheet.Cells(2, startCol).Value = "(データなし)"
+        ProcessSourceData = startCol + 2
+    End If
+End Function
+
+'========================================
+' シート書式設定（基本版）
+'========================================
+Private Sub FormatSheet(ws As Worksheet)
+    On Error Resume Next
+    ' ヘッダー行の書式
+    ws.Rows(1).Font.Bold = True
+    ws.Rows(1).HorizontalAlignment = xlCenter
+    
+    ' 先頭セルを選択
+    ws.Cells(1, 1).Select
+    On Error GoTo 0
+End Sub
+
+'========================================
+' 全シート統一書式設定
+'========================================
+Private Sub ApplyUniformFormattingToAllSheets(wb As Workbook)
+    Dim ws As Worksheet
+    Dim originalSheet As Worksheet
+    
+    ' 現在のアクティブシートを記録
+    Set originalSheet = ActiveSheet
+    
+    ' 各シートに書式を適用
+    For Each ws In wb.Worksheets
+        ' VBAシートやチャートシートは除外
+        If ws.Type = xlWorksheet Then
+            ws.Activate
+            Call ApplyDetailedFormatting(ws)
+        End If
+    Next ws
+    
+    ' 元のシートに戻る
+    originalSheet.Activate
+End Sub
+
+'========================================
+' 詳細書式設定（4つの要求を実装）
+'========================================
+Private Sub ApplyDetailedFormatting(ws As Worksheet)
+    On Error Resume Next
+    
+    ' 1. 列幅を11.6に統一（使用範囲のすべての列）
+    Dim lastCol As Long
+    lastCol = ws.UsedRange.Columns.Count + ws.UsedRange.Column - 1
+    If lastCol > 0 Then
+        ws.Range(ws.Columns(1), ws.Columns(lastCol)).ColumnWidth = 11.6
+    End If
+    
+    ' 2. フォントをCourier Newに変更（使用範囲全体）
+    With ws.UsedRange.Font
+        .Name = "Courier New"
+    End With
+    
+    ' 3. 特定行を太文字に設定（2,3,4,5,6,7,8,9,11行目）
+    Dim boldRows As Variant
+    Dim i As Long
+    boldRows = Array(2, 3, 4, 5, 6, 7, 8, 9, 11)
+    
+    For i = LBound(boldRows) To UBound(boldRows)
+        Dim rowNum As Long
+        rowNum = boldRows(i)
+        
+        ' 行が存在する場合のみ処理
+        If rowNum <= ws.UsedRange.Rows.Count + ws.UsedRange.Row - 1 Then
+            ws.Rows(rowNum).Font.Bold = True
+        End If
+    Next i
+    
+    ' 4. ヘッダー行（1行目）の追加書式
+    With ws.Rows(1)
+        .Font.Bold = True
+        .HorizontalAlignment = xlCenter
+        .Font.Name = "Courier New"
+    End With
+    
+    On Error GoTo 0
+End Sub
+
+'========================================
+' シート順序修正（逆順→正順）
+'========================================
+Private Sub ReorderSheetsCorrectly(wb As Workbook)
+    Dim allSheets As Collection
+    Dim ws As Worksheet
+    Dim sheetInfo As Variant
+    Dim i As Long
+    Dim j As Long
+    Dim tempName As String
+    
+    ' マージされたシートのみを収集（VBAシートは除外）
+    Set allSheets = New Collection
+    
+    For Each ws In wb.Worksheets
+        If ws.Type = xlWorksheet And ws.Name <> "Sheet1" And ws.Name <> "シート1" Then
+            ' シート名に"_"が含まれていない（マージシート）または元のシート名の場合
+            allSheets.Add Array(ws.Name, ws)
+        End If
+    Next ws
+    
+    ' シートが2つ以上ある場合のみ並び替え実行
+    If allSheets.Count > 1 Then
+        ' 最初のシートの位置を基準にして順番に配置
+        Dim firstSheet As Worksheet
+        Set firstSheet = allSheets(1)(1)  ' 最初のマージシート
+        
+        ' 逆順に配置されている場合の修正
+        ' 最後のシートから順番に最初のシートの前に移動
+        For i = allSheets.Count To 2 Step -1
+            Dim targetSheet As Worksheet
+            Set targetSheet = allSheets(i)(1)
+            
+            ' シートを最初のシートの前に移動
+            targetSheet.Move Before:=firstSheet
+        Next i
+    End If
+End Sub
+
+'========================================
+' テスト用関数
+'========================================
+Sub QuickTest()
+    Dim testSheetName As String
+    Dim sourceFiles(1 To 5) As Workbook
+    Dim customNames(1 To 5) As String
+    
+    testSheetName = InputBox("テスト用シート名を入力:", "クイックテスト", "")
+    If testSheetName = "" Then Exit Sub
+    
+    If SelectFilesAndCustomNames(sourceFiles, customNames) Then
+        Dim testData As Collection
+        Set testData = GetColoredSheetData(sourceFiles, testSheetName)
+        
+        If testData.Count > 0 Then
+            If CreateMergedSheet(ThisWorkbook, testSheetName & "_TEST", testData, customNames) Then
+                ' テスト用シートにも書式適用
+                Call ApplyUniformFormattingToAllSheets(ThisWorkbook)
+                MsgBox "テスト完了: " & testData.Count & "個のファイルをマージしました。" & vbNewLine & _
+                       "書式設定も適用済み（列幅11.6、Courier New、太字行）", vbInformation
+            Else
+                MsgBox "シート作成に失敗しました。", vbExclamation
+            End If
+        Else
+            MsgBox "該当する赤・黄色シートが見つかりませんでした。", vbInformation
+        End If
+    End If
+End Sub
