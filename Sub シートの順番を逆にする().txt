@@ -1,0 +1,6 @@
+Sub シートの順番を逆にする()
+    Dim i As Integer
+    For i = Sheets.Count To 2 Step -1
+        Sheets(i).Move Before:=Sheets(1)
+    Next i
+End Sub
