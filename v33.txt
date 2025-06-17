@@ -1,482 +1,202 @@
-'========================================
-' 完成版：5ファイル大規模マージVBA
-' 最終版：全エラー対策済み、大規模処理最適化
-' 機能：539シート×5ファイルの赤・黄色シートを効率的にマージ
-'========================================
+#!/bin/bash
+# SecurityHub 全件確実取得スクリプト（セッション切れ対策版）
 
-'========================================
-' メイン処理：完全版
-'========================================
-Sub FinalMergeColoredSheets()
-    On Error GoTo ErrorHandler
-    
-    ' 変数宣言（スコープ明確化）
-    Dim sourceFiles(1 To 5) As Workbook
-    Dim currentWB As Workbook
-    Dim uniqueSheetNames As Collection
-    Dim sheetName As Variant
-    Dim i As Long, j As Long
-    Dim processedCount As Long, totalSheetNames As Long
-    Dim createdSheets As Long
-    Dim startTime As Double
-    
-    ' 定数定義
-    Const RED_COLOR As Long = 16711680    ' RGB(255, 0, 0) の長整数値
-    Const YELLOW_COLOR As Long = 65535    ' RGB(255, 255, 0) の長整数値
-    
-    ' 初期化
-    Set currentWB = ThisWorkbook
-    startTime = Timer
-    
-    ' 開始確認
-    If MsgBox("【大規模マージ処理】" & vbNewLine & _
-              "・処理対象：最大2,695シート（539×5ファイル）" & vbNewLine & _
-              "・処理時間：数分～数十分" & vbNewLine & _
-              "・結果：現在のファイルに新シートを追加" & vbNewLine & vbNewLine & _
-              "5つのソースファイルを開いて準備完了ですか？", _
-              vbOKCancel + vbQuestion, "最終確認") = vbCancel Then
-        Exit Sub
-    End If
-    
-    ' ファイル選択とカスタム名設定
-    Dim customFileNames(1 To 5) As String
-    If Not SelectFilesAdvanced(sourceFiles, customFileNames) Then
-        MsgBox "処理がキャンセルされました。", vbInformation
-        Exit Sub
-    End If
-    
-    ' 処理環境の最適化
-    Call OptimizeEnvironment(True)
-    
-    ' シート名を順序付きで収集（1つ目のファイルの順序に従う）
-    Application.StatusBar = "シート名収集中..."
-    Set uniqueSheetNames = CollectOrderedSheetNames(sourceFiles)
-    totalSheetNames = uniqueSheetNames.Count
-    
-    MsgBox "収集完了！" & vbNewLine & _
-           "ユニークシート名: " & totalSheetNames & "個" & vbNewLine & _
-           "マージ処理を開始します...", vbInformation
-    
-    ' メイン処理ループ
-    For Each sheetName In uniqueSheetNames
-        processedCount = processedCount + 1
-        
-        ' 進捗表示（10%刻み）
-        If processedCount Mod Int(totalSheetNames / 10 + 1) = 0 Then
-            Application.StatusBar = "処理中... " & processedCount & "/" & totalSheetNames & _
-                                   " (" & Format(processedCount / totalSheetNames, "0%") & ")"
-        End If
-        
-        ' 該当シート名で赤・黄色ファイルを検索
-        Dim targetData As Collection
-        Set targetData = CollectColoredSheetData(sourceFiles, CStr(sheetName), RED_COLOR, YELLOW_COLOR)
-        
-        ' データがある場合のみシート作成
-        If targetData.Count > 0 Then
-            If CreateMergedSheetAdvanced(currentWB, CStr(sheetName), targetData, customFileNames) Then
-                createdSheets = createdSheets + 1
-            End If
-        End If
-        
-        ' メモリ管理（100シートごと）
-        If processedCount Mod 100 = 0 Then
-            DoEvents
-            Application.Calculate  ' 必要に応じて計算
-        End If
-    Next sheetName
-    
-    ' 処理完了
-    Call OptimizeEnvironment(False)
-    
-    Dim processingTime As String
-    processingTime = Format((Timer - startTime) / 60, "0.0")
-    
-    MsgBox "【処理完了】" & vbNewLine & _
-           "処理時間: " & processingTime & "分" & vbNewLine & _
-           "処理シート名: " & totalSheetNames & "個" & vbNewLine & _
-           "作成シート数: " & createdSheets & "個" & vbNewLine & _
-           "保存を忘れずに！", vbInformation, "完了"
-    
-    Application.StatusBar = False
-    Exit Sub
-    
-ErrorHandler:
-    Call OptimizeEnvironment(False)
-    MsgBox "エラーが発生しました: " & Err.Description & vbNewLine & _
-           "処理済み: " & processedCount & "/" & totalSheetNames, vbCritical
-    Application.StatusBar = False
-End Sub
+echo "🚀 SecurityHub全件取得（確実版）開始"
+echo "======================================"
 
-'========================================
-' ファイル選択（改良版）- カスタム名対応
-'========================================
-Private Function SelectFilesAdvanced(ByRef sourceFiles() As Workbook, ByRef customNames() As String) As Boolean
-    Dim availableWBs As Collection
-    Dim wb As Workbook
-    Dim i As Long
-    Dim fileList As String
-    Dim selectedNumbers(1 To 5) As Long
-    Dim inputStr As String
-    
-    ' 利用可能ファイルを収集
-    Set availableWBs = New Collection
-    For Each wb In Workbooks
-        If wb.Name <> ThisWorkbook.Name Then
-            availableWBs.Add wb
-        End If
-    Next wb
-    
-    If availableWBs.Count < 5 Then
-        MsgBox "エラー: ソースファイルが不足しています。" & vbNewLine & _
-               "必要: 5個、現在: " & availableWBs.Count & "個", vbCritical
-        SelectFilesAdvanced = False
-        Exit Function
-    End If
-    
-    ' ファイル一覧作成
-    fileList = "【利用可能なファイル一覧】" & vbNewLine
-    For i = 1 To availableWBs.Count
-        fileList = fileList & i & ". " & availableWBs(i).Name & vbNewLine
-    Next i
-    
-    ' 5つのファイルを選択
-    For i = 1 To 5
-        Do
-            inputStr = InputBox(fileList & vbNewLine & _
-                               "位置 " & i & " 番目のファイル番号を入力:" & vbNewLine & _
-                               "(1-" & availableWBs.Count & ")", _
-                               "ファイル選択 " & i & "/5")
-            
-            If inputStr = "" Then
-                SelectFilesAdvanced = False
-                Exit Function
-            End If
-            
-            selectedNumbers(i) = Val(inputStr)
-            
-            ' 入力値検証
-            If selectedNumbers(i) < 1 Or selectedNumbers(i) > availableWBs.Count Then
-                MsgBox "無効な番号です。1-" & availableWBs.Count & "の範囲で入力してください。", vbExclamation
-            ElseIf IsNumberAlreadyUsed(selectedNumbers, i - 1, selectedNumbers(i)) Then
-                MsgBox "この番号は既に選択されています。別の番号を選んでください。", vbExclamation
-            Else
-                Set sourceFiles(i) = availableWBs(selectedNumbers(i))
-                Exit Do
-            End If
-        Loop
-    Next i
-    
-    ' カスタム名の設定
-    For i = 1 To 5
-        customNames(i) = InputBox("ファイル" & i & "のカスタム名を入力してください:" & vbNewLine & _
-                                 "（ファイル: " & sourceFiles(i).Name & "）", _
-                                 "カスタム名設定 " & i & "/5", _
-                                 "ファイル" & i)
-        If customNames(i) = "" Then
-            customNames(i) = "ファイル" & i  ' デフォルト名
-        End If
-    Next i
-    
-    ' 最終確認
-    Dim confirmList As String
-    confirmList = "【選択されたファイル順序とカスタム名】" & vbNewLine
-    For i = 1 To 5
-        confirmList = confirmList & i & ". " & customNames(i) & " ← " & sourceFiles(i).Name & vbNewLine
-    Next i
-    
-    SelectFilesAdvanced = (MsgBox(confirmList & vbNewLine & "この設定で処理しますか？", _
-                                  vbYesNo + vbQuestion) = vbYes)
-End Function
+# nohupバックグラウンド実行用スクリプト作成
+cat > full_export_background.sh << 'EOF'
+#!/bin/bash
+# バックグラウンド実行用内部スクリプト
 
-'========================================
-' 重複チェック補助関数
-'========================================
-Private Function IsNumberAlreadyUsed(numbers() As Long, checkCount As Long, targetNumber As Long) As Boolean
-    Dim i As Long
-    For i = 1 To checkCount
-        If numbers(i) = targetNumber Then
-            IsNumberAlreadyUsed = True
-            Exit Function
-        End If
-    Next i
-    IsNumberAlreadyUsed = False
-End Function
+# ログファイル設定
+PROGRESS_LOG="progress.log"
+ERROR_LOG="error.log"
+JSON_OUTPUT="complete_findings.json"
+CSV_OUTPUT="complete_findings.csv"
+TEMP_FILE="temp_batch.json"
 
-'========================================
-' 順序付きシート名収集（1つ目のファイルの順序に従う）
-'========================================
-Private Function CollectOrderedSheetNames(sourceFiles() As Workbook) As Collection
-    Dim orderedNames As Collection
-    Dim ws As Worksheet
-    Dim sheetName As String
-    Dim i As Long
-    Dim hasColoredSheet As Boolean
-    
-    Set orderedNames = New Collection
-    
-    ' 1つ目のファイルの順序に従ってシート名を収集
-    For Each ws In sourceFiles(1).Worksheets
-        sheetName = ws.Name
-        hasColoredSheet = False
-        
-        ' 5つのファイルのいずれかで赤・黄色シートがあるかチェック
-        For i = 1 To 5
-            Dim checkWs As Worksheet
-            Set checkWs = Nothing
-            On Error Resume Next
-            Set checkWs = sourceFiles(i).Worksheets(sheetName)
-            On Error GoTo 0
-            
-            If Not checkWs Is Nothing Then
-                If checkWs.Tab.Color = 16711680 Or checkWs.Tab.Color = 65535 Then
-                    hasColoredSheet = True
-                    Exit For
-                End If
-            End If
-        Next i
-        
-        ' 赤・黄色シートがある場合のみコレクションに追加
-        If hasColoredSheet Then
-            orderedNames.Add sheetName
-        End If
-    Next ws
-    
-    Set CollectOrderedSheetNames = orderedNames
-End Function
+# ログ初期化
+echo "=== SecurityHub全件取得開始: $(date) ===" > "$PROGRESS_LOG"
+echo "=== エラーログ: $(date) ===" > "$ERROR_LOG"
 
-'========================================
-' 色付きシートデータ収集
-'========================================
-Private Function CollectColoredSheetData(sourceFiles() As Workbook, targetSheetName As String, _
-                                        redColor As Long, yellowColor As Long) As Collection
-    Dim coloredData As Collection
-    Dim i As Long
-    Dim ws As Worksheet
-    
-    Set coloredData = New Collection
-    
-    For i = 1 To 5
-        Set ws = Nothing
-        On Error Resume Next
-        Set ws = sourceFiles(i).Worksheets(targetSheetName)
-        On Error GoTo 0
-        
-        If Not ws Is Nothing Then
-            ' 色判定（厳密比較）
-            If ws.Tab.Color = redColor Or ws.Tab.Color = yellowColor Then
-                coloredData.Add Array(sourceFiles(i), ws, i, ws.Tab.Color)
-            End If
-        End If
-    Next i
-    
-    Set CollectColoredSheetData = coloredData
-End Function
+# 処理開始
+echo "[]" > "$JSON_OUTPUT"
+NEXT_TOKEN=""
+BATCH_COUNT=0
+TOTAL_FINDINGS=0
+ERROR_COUNT=0
 
-'========================================
-' 高度なシート作成（カスタム名対応）
-'========================================
-Private Function CreateMergedSheetAdvanced(targetWB As Workbook, baseSheetName As String, _
-                                          sourceData As Collection, customNames() As String) As Boolean
-    On Error GoTo CreateSheetError
-    
-    Dim newSheet As Worksheet
-    Dim safeName As String
-    Dim currentCol As Long
-    Dim i As Long
-    
-    ' 安全なシート名生成
-    safeName = GenerateSafeSheetName(targetWB, baseSheetName)
-    
-    ' シート作成
-    Set newSheet = targetWB.Worksheets.Add
-    newSheet.Name = safeName
-    currentCol = 1
-    
-    ' データマージ処理（カスタム名を渡す）
-    For i = 1 To sourceData.Count
-        currentCol = ProcessSingleSourceData(newSheet, sourceData(i), currentCol, customNames)
-    Next i
-    
-    ' 仕上げ処理
-    Call FormatMergedSheet(newSheet)
-    
-    CreateMergedSheetAdvanced = True
-    Exit Function
-    
-CreateSheetError:
-    CreateMergedSheetAdvanced = False
-    If Not newSheet Is Nothing Then
-        On Error Resume Next
-        Application.DisplayAlerts = False
-        newSheet.Delete
-        Application.DisplayAlerts = True
-        On Error GoTo 0
-    End If
-End Function
+echo "$(date): 全件取得処理開始" >> "$PROGRESS_LOG"
 
-'========================================
-' 安全なシート名生成
-'========================================
-Private Function GenerateSafeSheetName(wb As Workbook, baseName As String) As String
-    Dim safeName As String
-    Dim counter As Long
+while true; do
+    BATCH_COUNT=$((BATCH_COUNT + 1))
+    echo "$(date): バッチ ${BATCH_COUNT} 取得開始..." >> "$PROGRESS_LOG"
     
-    ' 特殊文字除去
-    safeName = baseName
-    safeName = Replace(safeName, "/", "_")
-    safeName = Replace(safeName, "\", "_")
-    safeName = Replace(safeName, "*", "_")
-    safeName = Replace(safeName, "?", "_")
-    safeName = Replace(safeName, "[", "_")
-    safeName = Replace(safeName, "]", "_")
-    safeName = Replace(safeName, ":", "_")
+    # API呼び出し（エラーハンドリング強化）
+    if [ -z "$NEXT_TOKEN" ]; then
+        # 初回
+        if ! aws securityhub get-findings --max-items 100 --output json > "$TEMP_FILE" 2>>"$ERROR_LOG"; then
+            echo "$(date): API呼び出しエラー（バッチ ${BATCH_COUNT}）" >> "$PROGRESS_LOG"
+            ERROR_COUNT=$((ERROR_COUNT + 1))
+            if [ $ERROR_COUNT -gt 3 ]; then
+                echo "$(date): 連続エラー制限に達しました。処理終了。" >> "$PROGRESS_LOG"
+                break
+            fi
+            echo "$(date): 30秒待機後リトライ..." >> "$PROGRESS_LOG"
+            sleep 30
+            continue
+        fi
+    else
+        # 2回目以降
+        if ! aws securityhub get-findings --max-items 100 --starting-token "$NEXT_TOKEN" --output json > "$TEMP_FILE" 2>>"$ERROR_LOG"; then
+            echo "$(date): API呼び出しエラー（バッチ ${BATCH_COUNT}）" >> "$PROGRESS_LOG"
+            ERROR_COUNT=$((ERROR_COUNT + 1))
+            if [ $ERROR_COUNT -gt 3 ]; then
+                echo "$(date): 連続エラー制限に達しました。処理終了。" >> "$PROGRESS_LOG"
+                break
+            fi
+            echo "$(date): 30秒待機後リトライ..." >> "$PROGRESS_LOG"
+            sleep 30
+            continue
+        fi
+    fi
     
-    ' 長さ制限（重複番号分を考慮）
-    If Len(safeName) > 25 Then
-        safeName = Left(safeName, 25)
-    End If
+    # 成功時はエラーカウントリセット
+    ERROR_COUNT=0
     
-    ' 重複回避
-    Dim testName As String
-    testName = safeName
-    counter = 0
+    # 取得件数確認
+    if ! CURRENT_COUNT=$(jq '.Findings | length' "$TEMP_FILE" 2>/dev/null); then
+        echo "$(date): JSON解析エラー（バッチ ${BATCH_COUNT}）" >> "$PROGRESS_LOG"
+        continue
+    fi
     
-    Do While SheetExistsSafe(wb, testName)
-        counter = counter + 1
-        testName = safeName & "_" & counter
-        If Len(testName) > 31 Then
-            safeName = Left(safeName, 31 - Len("_" & counter))
-            testName = safeName & "_" & counter
-        End If
-    Loop
+    TOTAL_FINDINGS=$((TOTAL_FINDINGS + CURRENT_COUNT))
+    echo "$(date): ${CURRENT_COUNT}件取得 (累計: ${TOTAL_FINDINGS}件)" >> "$PROGRESS_LOG"
     
-    GenerateSafeSheetName = testName
-End Function
+    # データ結合
+    if ! jq -s '.[0] + .[1].Findings' "$JSON_OUTPUT" "$TEMP_FILE" > temp_combined.json 2>>"$ERROR_LOG"; then
+        echo "$(date): データ結合エラー（バッチ ${BATCH_COUNT}）" >> "$PROGRESS_LOG"
+        continue
+    fi
+    mv temp_combined.json "$JSON_OUTPUT"
+    
+    # NextToken確認
+    NEXT_TOKEN=$(jq -r '.NextToken // empty' "$TEMP_FILE" 2>/dev/null)
+    
+    if [ -z "$NEXT_TOKEN" ]; then
+        echo "$(date): 全データ取得完了！総件数: ${TOTAL_FINDINGS}" >> "$PROGRESS_LOG"
+        break
+    fi
+    
+    echo "$(date): 次のバッチに進行（Token: ${NEXT_TOKEN:0:20}...)" >> "$PROGRESS_LOG"
+    
+    # API制限対策（進捗報告も兼ねる）
+    sleep 2
+    
+    # 進捗報告（10バッチごと）
+    if [ $((BATCH_COUNT % 10)) -eq 0 ]; then
+        echo "$(date): ===== 進捗報告: ${BATCH_COUNT}バッチ完了、累計${TOTAL_FINDINGS}件 =====" >> "$PROGRESS_LOG"
+    fi
+done
 
-'========================================
-' 安全なシート存在チェック
-'========================================
-Private Function SheetExistsSafe(wb As Workbook, sheetName As String) As Boolean
-    Dim testSheet As Worksheet
-    On Error Resume Next
-    Set testSheet = wb.Worksheets(sheetName)
-    SheetExistsSafe = (Not testSheet Is Nothing)
-    On Error GoTo 0
-    Set testSheet = Nothing
-End Function
+# CSV変換
+echo "$(date): CSV変換開始..." >> "$PROGRESS_LOG"
 
-'========================================
-' 単一ソースデータ処理
-'========================================
-Private Function ProcessSingleSourceData(targetSheet As Worksheet, sourceInfo As Variant, _
-                                        startCol As Long) As Long
-    Dim sourceWB As Workbook
-    Dim sourceWS As Worksheet
-    Dim fileIndex As Long
-    Dim tabColor As Long
-    Dim colorName As String
-    Dim dataRange As Range
-    Dim lastRow As Long, lastCol As Long
-    
-    ' ソース情報展開
-    Set sourceWB = sourceInfo(0)
-    Set sourceWS = sourceInfo(1)
-    fileIndex = sourceInfo(2)
-    tabColor = sourceInfo(3)
-    
-    ' 色名決定
-    If tabColor = 16711680 Then  ' RGB(255,0,0)
-        colorName = "赤"
-    ElseIf tabColor = 65535 Then  ' RGB(255,255,0)
-        colorName = "黄"
-    Else
-        colorName = "他"
-    End If
-    
-    ' ヘッダー作成
-    With targetSheet.Cells(1, startCol)
-        .Value = "ファイル" & fileIndex & "(" & colorName & ")"
-        .Font.Bold = True
-        .Interior.Color = tabColor
-        .Font.Color = IIf(tabColor = 65535, 0, 16777215)  ' 黄色背景なら黒文字、それ以外は白文字
-    End With
-    
-    ' データ範囲特定（4行目以降）
-    On Error Resume Next
-    lastRow = sourceWS.UsedRange.Rows.Count + sourceWS.UsedRange.Row - 1
-    lastCol = sourceWS.UsedRange.Columns.Count + sourceWS.UsedRange.Column - 1
-    On Error GoTo 0
-    
-    If lastRow >= 4 And lastCol >= 1 Then
-        Set dataRange = sourceWS.Range(sourceWS.Cells(4, 1), sourceWS.Cells(lastRow, lastCol))
-        
-        ' データコピー（値のみ）
-        On Error Resume Next
-        dataRange.Copy
-        targetSheet.Cells(2, startCol).PasteSpecial xlPasteValues
-        Application.CutCopyMode = False
-        On Error GoTo 0
-        
-        ProcessSingleSourceData = startCol + dataRange.Columns.Count + 1  ' 次の列位置
-    Else
-        targetSheet.Cells(2, startCol).Value = "(データなし)"
-        ProcessSingleSourceData = startCol + 2
-    End If
-End Function
+# CSVヘッダー
+cat > "$CSV_OUTPUT" << 'CSVHEADER'
+Id,Title,Severity,ComplianceStatus,WorkflowStatus,CreatedAt,UpdatedAt,AwsAccountId,Region,ResourceType,ResourceId,GeneratorId,Confidence,Description,FirstObservedAt,LastObservedAt
+CSVHEADER
 
-'========================================
-' マージシート書式設定
-'========================================
-Private Sub FormatMergedSheet(ws As Worksheet)
-    On Error Resume Next
-    ' ヘッダー行の書式設定
-    ws.Rows(1).Font.Bold = True
-    ws.Rows(1).HorizontalAlignment = xlCenter
-    
-    ' 列幅自動調整（最初の100列まで）
-    ws.Range("A:CV").EntireColumn.AutoFit
-    
-    ' 先頭セル選択
-    ws.Cells(1, 1).Select
-    On Error GoTo 0
-End Sub
+# JSON→CSV変換（エラーハンドリング付き）
+if jq -r '.[] | [
+    (.Id // ""),
+    ((.Title // "") | gsub("\n"; " ") | gsub(","; ";")),
+    (.Severity.Label // ""),
+    (.Compliance.Status // ""),
+    (.Workflow.Status // ""),
+    (.CreatedAt // ""),
+    (.UpdatedAt // ""),
+    (.AwsAccountId // ""),
+    (.Region // ""),
+    ((.Resources[0].Type // "") | tostring),
+    ((.Resources[0].Id // "") | tostring),
+    (.GeneratorId // ""),
+    (.Confidence // ""),
+    ((.Description // "") | gsub("\n"; " ") | gsub(","; ";") | gsub("\""; "\"\"")),
+    (.FirstObservedAt // ""),
+    (.LastObservedAt // "")
+] | @csv' "$JSON_OUTPUT" >> "$CSV_OUTPUT" 2>>"$ERROR_LOG"; then
+    CSV_LINES=$(wc -l < "$CSV_OUTPUT")
+    DATA_LINES=$((CSV_LINES - 1))
+    echo "$(date): CSV変換完了！データ行数: ${DATA_LINES}" >> "$PROGRESS_LOG"
+else
+    echo "$(date): CSV変換エラー" >> "$PROGRESS_LOG"
+fi
 
-'========================================
-' 環境最適化
-'========================================
-Private Sub OptimizeEnvironment(enableOptimization As Boolean)
-    If enableOptimization Then
-        Application.ScreenUpdating = False
-        Application.Calculation = xlCalculationManual
-        Application.EnableEvents = False
-        Application.DisplayAlerts = False
-    Else
-        Application.ScreenUpdating = True
-        Application.Calculation = xlCalculationAutomatic
-        Application.EnableEvents = True
-        Application.DisplayAlerts = True
-    End If
-End Sub
+# 最終統計
+echo "$(date): ===== 処理完了 =====" >> "$PROGRESS_LOG"
+echo "$(date): 総バッチ数: ${BATCH_COUNT}" >> "$PROGRESS_LOG"
+echo "$(date): 総取得件数: ${TOTAL_FINDINGS}" >> "$PROGRESS_LOG"
+echo "$(date): JSONファイル: ${JSON_OUTPUT}" >> "$PROGRESS_LOG"
+echo "$(date): CSVファイル: ${CSV_OUTPUT}" >> "$PROGRESS_LOG"
 
-'========================================
-' テスト用簡易版（カスタム名対応）
-'========================================
-Sub QuickTest()
-    Dim testSheet As String
-    testSheet = InputBox("テスト用シート名:", "クイックテスト")
-    If testSheet = "" Then Exit Sub
+# ファイルサイズ
+if [ -f "$CSV_OUTPUT" ]; then
+    CSV_SIZE=$(ls -lh "$CSV_OUTPUT" | awk '{print $5}')
+    echo "$(date): CSVサイズ: ${CSV_SIZE}" >> "$PROGRESS_LOG"
+fi
+
+# クリーンアップ
+rm -f "$TEMP_FILE" temp_combined.json
+
+echo "$(date): 全件取得処理終了" >> "$PROGRESS_LOG"
+EOF
+
+# 実行権限付与
+chmod +x full_export_background.sh
+
+echo "✅ バックグラウンド実行スクリプト準備完了"
+echo ""
+
+# 実行選択
+echo "🎯 実行方法を選択してください："
+echo ""
+echo "方法1: nohupバックグラウンド実行（推奨）"
+echo "  - セッション切れても継続"
+echo "  - 進捗はログファイルで確認"
+echo "  - 最も確実"
+echo ""
+echo "方法2: 通常実行"
+echo "  - リアルタイム進捗表示"
+echo "  - セッション切れリスクあり"
+echo ""
+
+read -p "方法1(nohup)で実行しますか？ (Y/n): " -n 1 -r
+echo
+
+if [[ $REPLY =~ ^[Nn]$ ]]; then
+    echo "🔄 通常実行モード"
+    ./full_export_background.sh
+else
+    echo "🚀 nohupバックグラウンド実行開始"
     
-    Dim sourceFiles(1 To 5) As Workbook
-    Dim customNames(1 To 5) As String
-    If SelectFilesAdvanced(sourceFiles, customNames) Then
-        Dim testData As Collection
-        Set testData = CollectColoredSheetData(sourceFiles, testSheet, 16711680, 65535)
-        
-        If testData.Count > 0 Then
-            Call CreateMergedSheetAdvanced(ThisWorkbook, testSheet & "_TEST", testData, customNames)
-            MsgBox "テスト完了: " & testData.Count & "個のファイルをマージしました。"
-        Else
-            MsgBox "該当する赤・黄色シートが見つかりませんでした。"
-        End If
-    End If
-End Sub
+    # nohup実行
+    nohup ./full_export_background.sh > nohup.out 2>&1 &
+    NOHUP_PID=$!
+    
+    echo "✅ バックグラウンド実行開始完了"
+    echo "📊 プロセスID: $NOHUP_PID"
+    echo ""
+    echo "📋 進捗確認コマンド："
+    echo "  tail -f progress.log     # リアルタイム進捗"
+    echo "  tail nohup.out          # 実行ログ"
+    echo "  ps aux | grep aws       # プロセス確認"
+    echo ""
+    echo "⏱️  予想完了時間: 15-20分程度"
+    echo "🎯 完了確認: ls -la complete_findings.csv"
+    echo ""
+    echo "🔍 今すぐ進捗確認："
+    sleep 3
+    tail -f progress.log
+fi
