@@ -1,287 +1,193 @@
 #!/bin/bash
-# SecurityHub CLI クイックスタートガイド
-# CloudShellで段階的に実行してください
+# SecurityHub 全件エクスポート（詳細14列）
+# all_findings.csv専用スクリプト
 
-echo "=== SecurityHub CLI エクスポート クイックスタート ==="
+set -e  # エラーで停止
 
-# =============================================================================
-# STEP 1: 環境確認（まず最初に実行）
-# =============================================================================
-echo "STEP 1: 環境確認を実行中..."
+echo "🔍 SecurityHub 全件エクスポート開始"
+echo "=================================="
 
-# SecurityHub有効化状況確認
-echo "SecurityHub状況確認:"
-aws securityhub describe-hub --output table 2>/dev/null || echo "SecurityHub未有効、または権限不足"
+# ファイル名設定
+JSON_OUTPUT="all_findings_full.json"
+CSV_OUTPUT="all_findings.csv"
+TEMP_FILE="temp_batch.json"
 
-# 現在のリージョン確認
-echo "現在のリージョン: $(aws configure get region)"
-
-# 認証情報確認
-echo "認証情報: $(aws sts get-caller-identity --query 'Arn' --output text 2>/dev/null || echo '認証エラー')"
-
-echo "STEP 1 完了!"
-echo ""
-
-# =============================================================================
-# STEP 2: 少量データでテスト（5件のみ取得）
-# =============================================================================
-echo "STEP 2: 少量テストデータ取得..."
-
-# 5件だけ取得してJSONで確認
-echo "5件のFindingsを取得中..."
-aws securityhub get-findings --max-items 5 --output json > test_5findings.json
-
-if [ $? -eq 0 ]; then
-    echo "✅ 取得成功！"
-    echo "件数: $(jq '.Findings | length' test_5findings.json)"
-    echo "サンプル項目確認:"
-    jq -r '.Findings[0] | keys[]' test_5findings.json | head -10
-else
-    echo "❌ 取得失敗。権限やSecurityHub設定を確認してください"
-    exit 1
+# 既存ファイルのバックアップ
+if [ -f "$CSV_OUTPUT" ]; then
+    mv "$CSV_OUTPUT" "${CSV_OUTPUT}.backup.$(date +%s)"
+    echo "📋 既存CSVをバックアップしました"
 fi
 
-echo "STEP 2 完了!"
-echo ""
-
-# =============================================================================
-# STEP 3: 全件数を把握
-# =============================================================================
-echo "STEP 3: 全体のデータ量確認..."
-
-# NextTokenの有無で大まかなデータ量を把握
-echo "データ量調査中..."
-FIRST_BATCH=$(aws securityhub get-findings --max-items 100 --output json)
-NEXT_TOKEN=$(echo "$FIRST_BATCH" | jq -r '.NextToken // "NONE"')
-
-if [ "$NEXT_TOKEN" = "NONE" ]; then
-    TOTAL_COUNT=$(echo "$FIRST_BATCH" | jq '.Findings | length')
-    echo "✅ 全データ: ${TOTAL_COUNT}件（100件未満）"
-    echo "→ 一括取得で十分です"
-else
-    echo "✅ データ量: 100件以上"
-    echo "→ ページネーション対応が必要です"
-    # 概算のため数回取得してみる
-    for i in {2..5}; do
-        NEXT_BATCH=$(aws securityhub get-findings --max-items 100 --starting-token "$NEXT_TOKEN" --output json 2>/dev/null)
-        if [ $? -eq 0 ]; then
-            NEXT_TOKEN=$(echo "$NEXT_BATCH" | jq -r '.NextToken // "NONE"')
-            echo "  ${i}00件目まで確認..."
-            if [ "$NEXT_TOKEN" = "NONE" ]; then
-                echo "  概算: ${i}00件程度"
-                break
-            fi
-        else
-            break
-        fi
-    done
+if [ -f "$JSON_OUTPUT" ]; then
+    mv "$JSON_OUTPUT" "${JSON_OUTPUT}.backup.$(date +%s)"
+    echo "📋 既存JSONをバックアップしました"
 fi
 
-echo "STEP 3 完了!"
+# 初期化
+echo "[]" > "$JSON_OUTPUT"
+NEXT_TOKEN=""
+BATCH_COUNT=0
+TOTAL_FINDINGS=0
+
+echo "📡 データ取得開始: $(date)"
 echo ""
 
-# =============================================================================
-# STEP 4: シンプルCSV出力（100件まで）
-# =============================================================================
-echo "STEP 4: シンプルCSV出力テスト..."
+# ページネーション対応の全件取得
+while true; do
+    BATCH_COUNT=$((BATCH_COUNT + 1))
+    echo "📦 バッチ ${BATCH_COUNT} 取得中..."
+    
+    # API呼び出し
+    if [ -z "$NEXT_TOKEN" ]; then
+        # 初回
+        aws securityhub get-findings \
+            --max-items 100 \
+            --output json > "$TEMP_FILE"
+    else
+        # 2回目以降
+        aws securityhub get-findings \
+            --max-items 100 \
+            --starting-token "$NEXT_TOKEN" \
+            --output json > "$TEMP_FILE"
+    fi
+    
+    # エラーチェック
+    if [ $? -ne 0 ]; then
+        echo "❌ API呼び出しエラー（バッチ ${BATCH_COUNT}）"
+        echo "   取得済みデータは保持されています"
+        break
+    fi
+    
+    # 今回の取得件数
+    CURRENT_COUNT=$(jq '.Findings | length' "$TEMP_FILE")
+    TOTAL_FINDINGS=$((TOTAL_FINDINGS + CURRENT_COUNT))
+    
+    echo "   👆 ${CURRENT_COUNT}件取得 (累計: ${TOTAL_FINDINGS}件)"
+    
+    # データを結合
+    jq -s '.[0] + .[1].Findings' "$JSON_OUTPUT" "$TEMP_FILE" > temp_combined.json
+    mv temp_combined.json "$JSON_OUTPUT"
+    
+    # NextTokenチェック
+    NEXT_TOKEN=$(jq -r '.NextToken // empty' "$TEMP_FILE")
+    
+    if [ -z "$NEXT_TOKEN" ]; then
+        echo "✅ 全データ取得完了！"
+        break
+    fi
+    
+    echo "   🔄 次のページへ続行..."
+    
+    # API制限対策（1秒待機）
+    sleep 1
+done
 
-echo "基本項目のCSVを作成中..."
+# 最終統計
+echo ""
+echo "📊 取得完了統計:"
+echo "   - 総バッチ数: ${BATCH_COUNT}"
+echo "   - 総取得件数: ${TOTAL_FINDINGS}"
+echo "   - JSONファイル: ${JSON_OUTPUT}"
 
-# シンプルな12列CSVを作成
-echo "Id,Title,Severity,ComplianceStatus,WorkflowStatus,CreatedAt,AwsAccountId,Region,ResourceType,GeneratorId,Description" > simple_findings.csv
+# CSV変換
+echo ""
+echo "🔄 CSV変換開始..."
 
-# 最初の100件を取得してCSV変換
-aws securityhub get-findings --max-items 100 --output json | \
-jq -r '.Findings[] | [
+# CSVヘッダー（詳細14列）
+cat > "$CSV_OUTPUT" << 'EOF'
+Id,Title,Severity,ComplianceStatus,WorkflowStatus,CreatedAt,UpdatedAt,AwsAccountId,Region,ResourceType,ResourceId,GeneratorId,Confidence,Description
+EOF
+
+# JSON→CSV変換
+echo "   📝 データ変換中..."
+jq -r '.[] | [
     .Id,
     .Title,
-    .Severity.Label,
-    .Compliance.Status,
-    .Workflow.Status,
+    (.Severity.Label // ""),
+    (.Compliance.Status // ""),
+    (.Workflow.Status // ""),
     .CreatedAt,
+    .UpdatedAt,
     .AwsAccountId,
     .Region,
-    (.Resources[0].Type // ""),
+    ((.Resources[0].Type // "") | tostring),
+    ((.Resources[0].Id // "") | tostring),
     .GeneratorId,
-    (.Description | gsub("\n"; " ") | gsub(","; ";"))
-] | @csv' >> simple_findings.csv
+    (.Confidence // ""),
+    ((.Description // "") | gsub("\n"; " ") | gsub(","; ";") | gsub("\""; "\"\""))
+] | @csv' "$JSON_OUTPUT" >> "$CSV_OUTPUT"
 
-echo "✅ simple_findings.csv 作成完了！"
-echo "行数: $(wc -l < simple_findings.csv)"
-echo "STEP 4 完了!"
+# 結果確認
+CSV_LINES=$(wc -l < "$CSV_OUTPUT")
+DATA_LINES=$((CSV_LINES - 1))
+
+echo "✅ CSV変換完了！"
+echo ""
+echo "🎉 最終結果:"
+echo "=================================="
+echo "📁 出力ファイル:"
+echo "   - ${CSV_OUTPUT}: ${CSV_LINES}行 (ヘッダー含む)"
+echo "   - データ行数: ${DATA_LINES}件"
+echo "   - JSONバックアップ: ${JSON_OUTPUT}"
 echo ""
 
-# =============================================================================
-# STEP 5: 全件取得スクリプト（必要な場合のみ）
-# =============================================================================
-read -p "全件取得を実行しますか？(y/N): " -n 1 -r
-echo
-if [[ $REPLY =~ ^[Yy]$ ]]; then
-    echo "STEP 5: 全件取得実行..."
-    
-    # 全件取得スクリプト
-    OUTPUT_FILE="all_findings.json"
-    CSV_FILE="all_findings.csv"
-    TEMP_FILE="temp_findings.json"
-    NEXT_TOKEN=""
-    COUNTER=1
-    
-    echo "全件取得開始: $(date)"
-    echo "[]" > $OUTPUT_FILE
-    
-    while true; do
-        echo "  ページ $COUNTER を取得中..."
-        
-        if [ -z "$NEXT_TOKEN" ]; then
-            # 初回実行
-            aws securityhub get-findings --max-items 100 --output json > $TEMP_FILE
-        else
-            # 2回目以降
-            aws securityhub get-findings --max-items 100 --starting-token "$NEXT_TOKEN" --output json > $TEMP_FILE
-        fi
-        
-        # エラーチェック
-        if [ $? -ne 0 ]; then
-            echo "❌ API呼び出しエラー。処理を終了します。"
-            break
-        fi
-        
-        # Findingsを結合
-        jq -s '.[0] + .[1].Findings' $OUTPUT_FILE $TEMP_FILE > tmp.json && mv tmp.json $OUTPUT_FILE
-        
-        # NextTokenを取得
-        NEXT_TOKEN=$(jq -r '.NextToken // empty' $TEMP_FILE)
-        
-        if [ -z "$NEXT_TOKEN" ]; then
-            echo "✅ 全データ取得完了"
-            break
-        fi
-        
-        COUNTER=$((COUNTER + 1))
-        echo "    NextToken: ${NEXT_TOKEN:0:20}..."
-        
-        # API制限対策（1秒待機）
-        sleep 1
-    done
-    
-    # 統計情報
-    TOTAL_COUNT=$(jq '. | length' $OUTPUT_FILE)
-    echo "📊 総取得件数: $TOTAL_COUNT"
-    
-    # CSV変換
-    echo "CSV変換中..."
-    echo "Id,Title,Severity,ComplianceStatus,WorkflowStatus,CreatedAt,UpdatedAt,AwsAccountId,Region,ResourceType,ResourceId,GeneratorId,Confidence,Description" > $CSV_FILE
-    
-    jq -r '.[] | [
-        .Id,
-        .Title,
-        .Severity.Label,
-        .Compliance.Status,
-        .Workflow.Status,
-        .CreatedAt,
-        .UpdatedAt,
-        .AwsAccountId,
-        .Region,
-        (.Resources[0].Type // ""),
-        (.Resources[0].Id // ""),
-        .GeneratorId,
-        .Confidence,
-        (.Description | gsub("\n"; " ") | gsub(","; ";"))
-    ] | @csv' $OUTPUT_FILE >> $CSV_FILE
-    
-    echo "✅ $CSV_FILE 作成完了！"
-    echo "行数: $(wc -l < $CSV_FILE)"
-    
-    # クリーンアップ
-    rm -f $TEMP_FILE
-    
-    echo "STEP 5 完了!"
-else
-    echo "STEP 5 スキップ"
-fi
-
+# ファイルサイズ表示
+echo "📏 ファイルサイズ:"
+ls -lh "$CSV_OUTPUT" "$JSON_OUTPUT" | awk '{print "   - " $9 ": " $5}'
 echo ""
 
-# =============================================================================
-# STEP 6: 結果確認・分析
-# =============================================================================
-echo "STEP 6: 結果確認..."
-
-# 最新のCSVファイルを特定
-if [ -f "all_findings.csv" ]; then
-    CSV_TARGET="all_findings.csv"
-elif [ -f "simple_findings.csv" ]; then
-    CSV_TARGET="simple_findings.csv"
-else
-    echo "❌ CSVファイルが見つかりません"
-    exit 1
-fi
-
-echo "📊 [$CSV_TARGET] 分析結果:"
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-
-# 基本統計
-echo "総行数: $(wc -l < $CSV_TARGET)"
+# サンプルデータ表示
+echo "👀 CSV内容サンプル（最初の3行）:"
+echo "=================================="
+head -3 "$CSV_OUTPUT"
 echo ""
+
+# 統計情報
+echo "📈 データ分析:"
+echo "=================================="
 
 # 重要度別集計
-echo "🚨 重要度別:"
-if [ -f "$CSV_TARGET" ]; then
-    tail -n +2 $CSV_TARGET | cut -d',' -f3 | sort | uniq -c | while read count level; do
-        echo "  $level: $count件"
+echo "🚨 重要度別件数:"
+if [ $DATA_LINES -gt 0 ]; then
+    tail -n +2 "$CSV_OUTPUT" | cut -d',' -f3 | sort | uniq -c | sort -nr | while read count level; do
+        [ -n "$level" ] && echo "   ${level}: ${count}件"
     done
 fi
 echo ""
 
 # ステータス別集計
-echo "📋 対応状況別:"
-if [ -f "$CSV_TARGET" ]; then
-    tail -n +2 $CSV_TARGET | cut -d',' -f5 | sort | uniq -c | while read count status; do
-        echo "  $status: $count件"
+echo "📋 対応状況別件数:"
+if [ $DATA_LINES -gt 0 ]; then
+    tail -n +2 "$CSV_OUTPUT" | cut -d',' -f5 | sort | uniq -c | sort -nr | while read count status; do
+        [ -n "$status" ] && echo "   ${status}: ${count}件"
     done
 fi
 echo ""
 
-# リソース種別トップ5
+# リソース種別TOP5
 echo "🔧 リソース種別 TOP5:"
-if [ -f "$CSV_TARGET" ]; then
-    tail -n +2 $CSV_TARGET | cut -d',' -f9 | sort | uniq -c | sort -nr | head -5 | while read count type; do
-        echo "  $type: $count件"
+if [ $DATA_LINES -gt 0 ]; then
+    tail -n +2 "$CSV_OUTPUT" | cut -d',' -f10 | sort | uniq -c | sort -nr | head -5 | while read count type; do
+        [ -n "$type" ] && echo "   ${type}: ${count}件"
     done
 fi
-
 echo ""
-echo "✅ 全工程完了！"
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo "📁 出力ファイル:"
-ls -la *.csv *.json 2>/dev/null || echo "  ファイルなし"
+
+# クリーンアップ
+rm -f "$TEMP_FILE" temp_combined.json
+
+echo "🎯 次のステップ:"
+echo "=================================="
+echo "1. CloudShell GUI で '${CSV_OUTPUT}' をダウンロード"
+echo "2. Excel/Google Sheets で開いて分析"
+echo "3. 必要に応じてフィルタリング・グラフ作成"
 echo ""
-echo "💡 次のステップ:"
-echo "  1. CSVファイルをローカルにダウンロード"
-echo "  2. Excel等で開いて分析"
-echo "  3. 必要に応じてフィルタリング条件を調整"
-echo "  4. 定期実行の自動化を検討"
+echo "💡 ダウンロード方法:"
+echo "   CloudShell画面右上の「⋮」→「Download file」→「${CSV_OUTPUT}」"
+echo ""
+echo "✅ 処理完了: $(date)"
 
-# =============================================================================
-# 補足: 便利なワンライナー集
-# =============================================================================
-cat << 'EOF'
-
-🔧 便利なコマンド集:
-
-# 高重要度のみ抽出
-aws securityhub get-findings --filters '{"SeverityLabel":[{"Value":"HIGH","Comparison":"EQUALS"},{"Value":"CRITICAL","Comparison":"EQUALS"}]}' --output table
-
-# 特定リソース種別のみ
-aws securityhub get-findings --filters '{"ResourceType":[{"Value":"AwsEc2Instance","Comparison":"EQUALS"}]}' --output table
-
-# 新規案件のみ
-aws securityhub get-findings --filters '{"WorkflowStatus":[{"Value":"NEW","Comparison":"EQUALS"}]}' --output table
-
-# 最近30日の案件
-aws securityhub get-findings --filters '{"CreatedAt":[{"DateRange":{"Value":30,"Unit":"DAYS"}}]}' --output table
-
-# CSVをS3にアップロード（共有用）
-# aws s3 cp all_findings.csv s3://your-bucket/securityhub-export-$(date +%Y%m%d).csv
-
-EOF
+# 最終確認
+echo ""
+echo "🔍 作成ファイル最終確認:"
+ls -la "$CSV_OUTPUT" "$JSON_OUTPUT" 2>/dev/null || echo "ファイル作成エラー"
