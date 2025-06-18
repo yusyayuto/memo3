@@ -1,0 +1,2 @@
+OUTPUT_FILE="securityhub_findings_$(date +%Y%m%d_%H%M%S).csv"
+echo "出力ファイル名: ${OUTPUT_FILE}"
