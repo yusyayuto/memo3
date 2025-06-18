@@ -1,0 +1,32 @@
+echo "=== 今回作成ファイル削除開始 ==="
+
+# 削除前の確認
+echo "削除対象ファイル："
+ls -la complete_findings.* bulletproof_full_export.sh full_export_background.sh progress.log error.log nohup.out temp_*.json 2>/dev/null
+
+echo ""
+read -p "上記ファイルを削除しますか？ (y/N): " -n 1 -r
+echo
+
+if [[ $REPLY =~ ^[Yy]$ ]]; then
+    # 今回作成したファイルを削除
+    rm -f complete_findings.*
+    rm -f bulletproof_full_export.sh full_export_background.sh
+    rm -f progress.log error.log nohup.out
+    rm -f temp_*.json
+    rm -f temp_*.csv
+    rm -f all_findings*.json all_findings*.csv
+    
+    echo "✅ 今回作成ファイル削除完了"
+    
+    # 削除後の確認
+    echo ""
+    echo "削除後の状況："
+    df -h
+    echo ""
+    echo "残存ファイル確認："
+    ls -la findings_* | head -5 2>/dev/null || echo "findings_* ファイルなし"
+    echo "findings_* ファイル数: $(ls findings_* 2>/dev/null | wc -l)"
+else
+    echo "削除をキャンセルしました"
+fi
