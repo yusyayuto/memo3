@@ -1,0 +1,2 @@
+ls -la *.csv *.json *.log *.sh
+ps aux | grep aws | grep -v grep
