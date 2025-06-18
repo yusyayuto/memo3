@@ -1,0 +1,184 @@
+# SecurityHub 全項目・全件CSV出力（段階3）
+echo "=== SecurityHub 全項目・全件 CSV出力開始 ==="
+echo "⚠️  処理時間：数分〜十数分かかる可能性があります"
+echo "⚠️  大量のデータが取得される可能性があります"
+echo ""
+
+# ファイル名設定
+OUTPUT_FILE="securityhub_full_$(date +%Y%m%d_%H%M%S).csv"
+echo "出力ファイル: ${OUTPUT_FILE}"
+
+# 拡張CSVヘッダー作成（全項目）
+cat > ${OUTPUT_FILE} << 'EOF'
+Id,SchemaVersion,ProductArn,GeneratorId,AwsAccountId,Type1,Type2,Type3,FirstObservedAt,LastObservedAt,CreatedAt,UpdatedAt,SeverityLabel,SeverityScore,SeverityOriginal,Title,Description,SourceUrl,WorkflowStatus,WorkflowReason,RecordState,RelatedFindingsProductArn,RelatedFindingsId,NoteText,NoteUpdatedAt,NoteUpdatedBy,ComplianceStatus,ComplianceRelatedRequirements,VerificationState,Resource1Type,Resource1Id,Resource1Partition,Resource1Region,Resource1Tags,Resource2Type,Resource2Id,Resource2Region,ProductName,CompanyName,Region,ProcessName,ProcessPath,ProcessPid,ProcessParentPid,ProcessLaunchedAt,ProcessTerminatedAt,ThreatIntelIndicatorType,ThreatIntelIndicatorValue,ThreatIntelIndicatorCategory,ThreatIntelIndicatorLastObservedAt,ThreatIntelIndicatorSource,ThreatIntelIndicatorSourceUrl,MalwareName,MalwareType,MalwarePath,MalwareState,NetworkDirection,NetworkProtocol,NetworkOpenPortRange,NetworkSourceIpV4,NetworkSourceIpV6,NetworkSourcePort,NetworkSourceDomain,NetworkSourceMac,NetworkDestinationIpV4,NetworkDestinationIpV6,NetworkDestinationPort,NetworkDestinationDomain,ActionType,ActionDescription,RemediationRecommendationText,RemediationRecommendationUrl,UserDefinedFields,ProductFields
+EOF
+
+# 全件取得のためのページネーション処理
+echo "データ取得開始..."
+NEXT_TOKEN=""
+TOTAL_COUNT=0
+PAGE=1
+
+while true; do
+    echo "ページ ${PAGE} を取得中..."
+    
+    # ページネーション処理
+    if [ -z "$NEXT_TOKEN" ]; then
+        RESULT=$(aws securityhub get-findings \
+            --region ap-northeast-1 \
+            --max-items 1000 \
+            --output json 2>/dev/null)
+    else
+        RESULT=$(aws securityhub get-findings \
+            --region ap-northeast-1 \
+            --max-items 1000 \
+            --starting-token "$NEXT_TOKEN" \
+            --output json 2>/dev/null)
+    fi
+    
+    # エラーチェック
+    if [ $? -ne 0 ]; then
+        echo "❌ API呼び出しエラーが発生しました"
+        break
+    fi
+    
+    # findingsデータ抽出
+    FINDINGS=$(echo "$RESULT" | jq -r '.Findings[]?' 2>/dev/null)
+    
+    if [ -z "$FINDINGS" ] || [ "$FINDINGS" = "null" ]; then
+        echo "📝 このページにはデータがありません"
+        break
+    fi
+    
+    # CSVデータ変換
+    echo "$RESULT" | jq -r '
+    .Findings[]? | 
+    [
+        .Id // "",
+        .SchemaVersion // "",
+        .ProductArn // "",
+        .GeneratorId // "",
+        .AwsAccountId // "",
+        (.Types[0] // ""),
+        (.Types[1] // ""),
+        (.Types[2] // ""),
+        .FirstObservedAt // "",
+        .LastObservedAt // "",
+        .CreatedAt // "",
+        .UpdatedAt // "",
+        .Severity.Label // "",
+        .Severity.Normalized // "",
+        .Severity.Original // "",
+        (.Title // "" | gsub("\n"; " ") | gsub(","; ";")),
+        (.Description // "" | gsub("\n"; " ") | gsub(","; ";")),
+        .SourceUrl // "",
+        .Workflow.Status // "",
+        (.Workflow.Reason // "" | gsub("\n"; " ") | gsub(","; ";")),
+        .RecordState // "",
+        (.RelatedFindings[0].ProductArn // ""),
+        (.RelatedFindings[0].Id // ""),
+        (.Note.Text // "" | gsub("\n"; " ") | gsub(","; ";")),
+        .Note.UpdatedAt // "",
+        .Note.UpdatedBy // "",
+        .Compliance.Status // "",
+        ((.Compliance.RelatedRequirements // []) | join(";")),
+        .VerificationState // "",
+        (.Resources[0].Type // ""),
+        (.Resources[0].Id // ""),
+        (.Resources[0].Partition // ""),
+        (.Resources[0].Region // ""),
+        ((.Resources[0].Tags // {}) | to_entries | map("\(.key)=\(.value)") | join(";")),
+        (.Resources[1].Type // ""),
+        (.Resources[1].Id // ""),
+        (.Resources[1].Region // ""),
+        .ProductName // "",
+        .CompanyName // "",
+        .Region // "",
+        (.Process.Name // ""),
+        (.Process.Path // ""),
+        (.Process.Pid // ""),
+        (.Process.ParentPid // ""),
+        (.Process.LaunchedAt // ""),
+        (.Process.TerminatedAt // ""),
+        (.ThreatIntelIndicators[0].Type // ""),
+        (.ThreatIntelIndicators[0].Value // ""),
+        (.ThreatIntelIndicators[0].Category // ""),
+        (.ThreatIntelIndicators[0].LastObservedAt // ""),
+        (.ThreatIntelIndicators[0].Source // ""),
+        (.ThreatIntelIndicators[0].SourceUrl // ""),
+        (.Malware[0].Name // ""),
+        (.Malware[0].Type // ""),
+        (.Malware[0].Path // ""),
+        (.Malware[0].State // ""),
+        (.Network.Direction // ""),
+        (.Network.Protocol // ""),
+        (.Network.OpenPortRange.Begin // ""),
+        (.Network.SourceIpV4 // ""),
+        (.Network.SourceIpV6 // ""),
+        (.Network.SourcePort // ""),
+        (.Network.SourceDomain // ""),
+        (.Network.SourceMac // ""),
+        (.Network.DestinationIpV4 // ""),
+        (.Network.DestinationIpV6 // ""),
+        (.Network.DestinationPort // ""),
+        (.Network.DestinationDomain // ""),
+        (.Action.ActionType // ""),
+        (.Action.Description // "" | gsub("\n"; " ") | gsub(","; ";")),
+        (.Remediation.Recommendation.Text // "" | gsub("\n"; " ") | gsub(","; ";")),
+        (.Remediation.Recommendation.Url // ""),
+        ((.UserDefinedFields // {}) | to_entries | map("\(.key)=\(.value)") | join(";")),
+        ((.ProductFields // {}) | to_entries | map("\(.key)=\(.value)") | join(";"))
+    ] | @csv
+    ' >> ${OUTPUT_FILE} 2>/dev/null
+    
+    # この ページの件数をカウント
+    PAGE_COUNT=$(echo "$RESULT" | jq -r '.Findings | length' 2>/dev/null)
+    TOTAL_COUNT=$((TOTAL_COUNT + PAGE_COUNT))
+    
+    echo "   → ${PAGE_COUNT} 件取得（累計: ${TOTAL_COUNT} 件）"
+    
+    # 次のトークンを取得
+    NEXT_TOKEN=$(echo "$RESULT" | jq -r '.NextToken // empty' 2>/dev/null)
+    
+    # 次のトークンがない場合は終了
+    if [ -z "$NEXT_TOKEN" ] || [ "$NEXT_TOKEN" = "null" ]; then
+        echo "📝 全てのページを取得完了"
+        break
+    fi
+    
+    PAGE=$((PAGE + 1))
+    
+    # 無限ループ防止（最大50ページ）
+    if [ $PAGE -gt 50 ]; then
+        echo "⚠️  最大ページ数に達しました"
+        break
+    fi
+    
+    # APIレート制限対策（少し待機）
+    sleep 1
+done
+
+# 結果表示
+echo ""
+echo "=== 🎉 全項目・全件取得完了！ ==="
+echo "📁 ファイル名: ${OUTPUT_FILE}"
+echo "📊 総レコード数: ${TOTAL_COUNT} 件"
+echo "📏 ファイルサイズ: $(ls -lh ${OUTPUT_FILE} | awk '{print $5}')"
+echo ""
+echo "=== ファイル確認 ==="
+echo "ヘッダー行数: $(head -1 ${OUTPUT_FILE} | tr ',' '\n' | wc -l) 項目"
+echo "データ行数: $(tail -n +2 ${OUTPUT_FILE} | wc -l) 行"
+echo ""
+echo "=== 最初の数行プレビュー ==="
+echo "ヘッダー:"
+head -1 ${OUTPUT_FILE} | cut -c1-100
+echo "..."
+echo ""
+echo "サンプルデータ:"
+head -2 ${OUTPUT_FILE} | tail -1 | cut -c1-100
+echo "..."
+echo ""
+echo "🎯 次のステップ:"
+echo "1. ファイルをダウンロード: cat ${OUTPUT_FILE}"
+echo "2. Excelで開いて確認"
+echo "3. 必要に応じて項目を絞り込み"
