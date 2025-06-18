@@ -1,0 +1,10 @@
+# 1. スクリプトファイルを作成
+vi securityhub_test.sh
+
+# 2. 上記のスクリプト内容をコピー&ペースト
+
+# 3. 実行権限付与
+chmod +x securityhub_test.sh
+
+# 4. スクリプト実行
+./securityhub_test.sh
