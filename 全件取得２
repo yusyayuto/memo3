@@ -1,0 +1,267 @@
+# SecurityHub 完全版・全項目・無制限CSV出力
+echo "🚀 SecurityHub 完全版・全項目・無制限 CSV出力開始"
+echo "⚠️  制限なし：全てのfindingsを取得します"
+echo "⚠️  全項目：100項目以上のCSVを作成します"
+echo "⚠️  処理時間：数十分〜1時間以上かかる可能性があります"
+echo ""
+
+# ファイル名設定
+OUTPUT_FILE="securityhub_complete_$(date +%Y%m%d_%H%M%S).csv"
+echo "📁 出力ファイル: ${OUTPUT_FILE}"
+
+# 完全版CSVヘッダー作成（全項目・ネストしたデータも展開）
+cat > ${OUTPUT_FILE} << 'EOF'
+Id,SchemaVersion,ProductArn,GeneratorId,AwsAccountId,AwsAccountName,Type1,Type2,Type3,Type4,Type5,FirstObservedAt,LastObservedAt,CreatedAt,UpdatedAt,ProcessedAt,SeverityLabel,SeverityNormalized,SeverityOriginal,SeverityProduct,Confidence,Criticality,Title,Description,SourceUrl,WorkflowStatus,WorkflowReason,WorkflowState,RecordState,RelatedFindings1_ProductArn,RelatedFindings1_Id,RelatedFindings2_ProductArn,RelatedFindings2_Id,RelatedFindings3_ProductArn,RelatedFindings3_Id,NoteText,NoteUpdatedAt,NoteUpdatedBy,ComplianceStatus,ComplianceStatusReasons,ComplianceRelatedRequirements,ComplianceSecurityControlId,ComplianceSecurityControlsConfig,VerificationState,Resource1_Type,Resource1_Id,Resource1_Partition,Resource1_Region,Resource1_Tags,Resource1_ApplicationArn,Resource1_ApplicationName,Resource1_Details,Resource2_Type,Resource2_Id,Resource2_Region,Resource2_Tags,Resource3_Type,Resource3_Id,Resource3_Region,ProductName,CompanyName,Region,ProcessName,ProcessPath,ProcessPid,ProcessParentPid,ProcessLaunchedAt,ProcessTerminatedAt,ProcessParentPath,ProcessParentName,ProcessId,ThreatIntelIndicator1_Type,ThreatIntelIndicator1_Value,ThreatIntelIndicator1_Category,ThreatIntelIndicator1_LastObservedAt,ThreatIntelIndicator1_Source,ThreatIntelIndicator1_SourceUrl,ThreatIntelIndicator2_Type,ThreatIntelIndicator2_Value,ThreatIntelIndicator2_Category,MalwareName1,MalwareType1,MalwarePath1,MalwareState1,MalwareName2,MalwareType2,MalwarePath2,MalwareState2,NetworkDirection,NetworkProtocol,NetworkOpenPortRange_Begin,NetworkOpenPortRange_End,NetworkSourceIpV4,NetworkSourceIpV6,NetworkSourcePort,NetworkSourceDomain,NetworkSourceMac,NetworkDestinationIpV4,NetworkDestinationIpV6,NetworkDestinationPort,NetworkDestinationDomain,NetworkPath_ComponentType,NetworkPath_ComponentId,NetworkPath_RemoteIpDetails,ActionType,ActionNetworkConnectionAction,ActionPortProbeAction,ActionDnsRequestAction,ActionDescription,ActionRemoteIpDetails,ActionRemotePortDetails,ActionLocalIpDetails,ActionLocalPortDetails,ActionServiceName,RemediationRecommendationText,RemediationRecommendationUrl,RemediationLambdaCodeSha256,PatchSummaryId,PatchSummaryInstalledCount,PatchSummaryMissingCount,PatchSummaryFailedCount,PatchSummaryInstalledOtherCount,PatchSummaryInstalledRejectedCount,PatchSummaryOperationStartTime,PatchSummaryOperationEndTime,PatchSummaryRebootOption,PatchSummaryOperation,Vulnerabilities1_Id,Vulnerabilities1_VulnerablePackages,Vulnerabilities1_Cvss,Vulnerabilities1_FixAvailable,Vulnerabilities1_VendorSeverity,Vulnerabilities1_VendorCreatedAt,Vulnerabilities1_VendorUpdatedAt,Vulnerabilities2_Id,Vulnerabilities2_VulnerablePackages,FindingProviderFieldsConfidence,FindingProviderFieldsCriticality,FindingProviderFieldsRelatedFindings,FindingProviderFieldsSeverity,FindingProviderFieldsTypes,GeneratorDetailsName,GeneratorDetailsDescription,GeneratorDetailsLabels,GeneratorDetailsRuleId,DetectionType,DetectionDetails,Threats1_Name,Threats1_Type,Threats1_ItemPaths,Threats2_Name,Threats2_Type,Threats2_ItemPaths,Sample,UserDefinedFields,ProductFields,WorkflowState_DEPRECATED
+EOF
+
+# 完全版データ取得（制限なし）
+echo "📊 データ取得開始..."
+NEXT_TOKEN=""
+TOTAL_COUNT=0
+PAGE=1
+
+while true; do
+    echo "📄 ページ ${PAGE} を取得中..."
+    
+    # ページネーション処理（制限なし）
+    if [ -z "$NEXT_TOKEN" ]; then
+        RESULT=$(aws securityhub get-findings \
+            --region ap-northeast-1 \
+            --max-items 1000 \
+            --output json 2>/dev/null)
+    else
+        RESULT=$(aws securityhub get-findings \
+            --region ap-northeast-1 \
+            --max-items 1000 \
+            --starting-token "$NEXT_TOKEN" \
+            --output json 2>/dev/null)
+    fi
+    
+    # エラーチェック
+    if [ $? -ne 0 ]; then
+        echo "❌ API呼び出しエラーが発生しました"
+        break
+    fi
+    
+    # findingsデータ抽出
+    FINDINGS=$(echo "$RESULT" | jq -r '.Findings[]?' 2>/dev/null)
+    
+    if [ -z "$FINDINGS" ] || [ "$FINDINGS" = "null" ]; then
+        echo "📝 このページにはデータがありません"
+        break
+    fi
+    
+    # 完全版CSVデータ変換（全項目対応）
+    echo "$RESULT" | jq -r '
+    .Findings[]? | 
+    [
+        .Id // "",
+        .SchemaVersion // "",
+        .ProductArn // "",
+        .GeneratorId // "",
+        .AwsAccountId // "",
+        .AwsAccountName // "",
+        (.Types[0] // ""),
+        (.Types[1] // ""),
+        (.Types[2] // ""),
+        (.Types[3] // ""),
+        (.Types[4] // ""),
+        .FirstObservedAt // "",
+        .LastObservedAt // "",
+        .CreatedAt // "",
+        .UpdatedAt // "",
+        .ProcessedAt // "",
+        .Severity.Label // "",
+        .Severity.Normalized // "",
+        .Severity.Original // "",
+        .Severity.Product // "",
+        .Confidence // "",
+        .Criticality // "",
+        (.Title // "" | gsub("\n"; " ") | gsub(","; ";")),
+        (.Description // "" | gsub("\n"; " ") | gsub(","; ";")),
+        .SourceUrl // "",
+        .Workflow.Status // "",
+        (.Workflow.Reason // "" | gsub("\n"; " ") | gsub(","; ";")),
+        .WorkflowState // "",
+        .RecordState // "",
+        (.RelatedFindings[0].ProductArn // ""),
+        (.RelatedFindings[0].Id // ""),
+        (.RelatedFindings[1].ProductArn // ""),
+        (.RelatedFindings[1].Id // ""),
+        (.RelatedFindings[2].ProductArn // ""),
+        (.RelatedFindings[2].Id // ""),
+        (.Note.Text // "" | gsub("\n"; " ") | gsub(","; ";")),
+        .Note.UpdatedAt // "",
+        .Note.UpdatedBy // "",
+        .Compliance.Status // "",
+        ((.Compliance.StatusReasons // []) | map(.ReasonCode // .) | join(";")),
+        ((.Compliance.RelatedRequirements // []) | join(";")),
+        .Compliance.SecurityControlId // "",
+        (.Compliance.SecurityControlsConfiguration // "" | tostring),
+        .VerificationState // "",
+        (.Resources[0].Type // ""),
+        (.Resources[0].Id // ""),
+        (.Resources[0].Partition // ""),
+        (.Resources[0].Region // ""),
+        ((.Resources[0].Tags // {}) | to_entries | map("\(.key)=\(.value)") | join(";")),
+        (.Resources[0].ApplicationArn // ""),
+        (.Resources[0].ApplicationName // ""),
+        (.Resources[0].Details // "" | tostring),
+        (.Resources[1].Type // ""),
+        (.Resources[1].Id // ""),
+        (.Resources[1].Region // ""),
+        ((.Resources[1].Tags // {}) | to_entries | map("\(.key)=\(.value)") | join(";")),
+        (.Resources[2].Type // ""),
+        (.Resources[2].Id // ""),
+        (.Resources[2].Region // ""),
+        .ProductName // "",
+        .CompanyName // "",
+        .Region // "",
+        (.Process.Name // ""),
+        (.Process.Path // ""),
+        (.Process.Pid // ""),
+        (.Process.ParentPid // ""),
+        (.Process.LaunchedAt // ""),
+        (.Process.TerminatedAt // ""),
+        (.Process.ParentPath // ""),
+        (.Process.ParentName // ""),
+        (.Process.Id // ""),
+        (.ThreatIntelIndicators[0].Type // ""),
+        (.ThreatIntelIndicators[0].Value // ""),
+        (.ThreatIntelIndicators[0].Category // ""),
+        (.ThreatIntelIndicators[0].LastObservedAt // ""),
+        (.ThreatIntelIndicators[0].Source // ""),
+        (.ThreatIntelIndicators[0].SourceUrl // ""),
+        (.ThreatIntelIndicators[1].Type // ""),
+        (.ThreatIntelIndicators[1].Value // ""),
+        (.ThreatIntelIndicators[1].Category // ""),
+        (.Malware[0].Name // ""),
+        (.Malware[0].Type // ""),
+        (.Malware[0].Path // ""),
+        (.Malware[0].State // ""),
+        (.Malware[1].Name // ""),
+        (.Malware[1].Type // ""),
+        (.Malware[1].Path // ""),
+        (.Malware[1].State // ""),
+        (.Network.Direction // ""),
+        (.Network.Protocol // ""),
+        (.Network.OpenPortRange.Begin // ""),
+        (.Network.OpenPortRange.End // ""),
+        (.Network.SourceIpV4 // ""),
+        (.Network.SourceIpV6 // ""),
+        (.Network.SourcePort // ""),
+        (.Network.SourceDomain // ""),
+        (.Network.SourceMac // ""),
+        (.Network.DestinationIpV4 // ""),
+        (.Network.DestinationIpV6 // ""),
+        (.Network.DestinationPort // ""),
+        (.Network.DestinationDomain // ""),
+        (.NetworkPath[0].ComponentType // ""),
+        (.NetworkPath[0].ComponentId // ""),
+        (.NetworkPath[0].RemoteIpDetails // "" | tostring),
+        (.Action.ActionType // ""),
+        (.Action.NetworkConnectionAction // "" | tostring),
+        (.Action.PortProbeAction // "" | tostring),
+        (.Action.DnsRequestAction // "" | tostring),
+        (.Action.Description // "" | gsub("\n"; " ") | gsub(","; ";")),
+        (.Action.RemoteIpDetails // "" | tostring),
+        (.Action.RemotePortDetails // "" | tostring),
+        (.Action.LocalIpDetails // "" | tostring),
+        (.Action.LocalPortDetails // "" | tostring),
+        (.Action.ServiceName // ""),
+        (.Remediation.Recommendation.Text // "" | gsub("\n"; " ") | gsub(","; ";")),
+        (.Remediation.Recommendation.Url // ""),
+        (.Remediation.LambdaCodeSha256 // ""),
+        (.PatchSummary.Id // ""),
+        (.PatchSummary.InstalledCount // ""),
+        (.PatchSummary.MissingCount // ""),
+        (.PatchSummary.FailedCount // ""),
+        (.PatchSummary.InstalledOtherCount // ""),
+        (.PatchSummary.InstalledRejectedCount // ""),
+        (.PatchSummary.OperationStartTime // ""),
+        (.PatchSummary.OperationEndTime // ""),
+        (.PatchSummary.RebootOption // ""),
+        (.PatchSummary.Operation // ""),
+        (.Vulnerabilities[0].Id // ""),
+        (.Vulnerabilities[0].VulnerablePackages // "" | tostring),
+        (.Vulnerabilities[0].Cvss // "" | tostring),
+        (.Vulnerabilities[0].FixAvailable // ""),
+        (.Vulnerabilities[0].VendorSeverity // ""),
+        (.Vulnerabilities[0].VendorCreatedAt // ""),
+        (.Vulnerabilities[0].VendorUpdatedAt // ""),
+        (.Vulnerabilities[1].Id // ""),
+        (.Vulnerabilities[1].VulnerablePackages // "" | tostring),
+        (.FindingProviderFields.Confidence // ""),
+        (.FindingProviderFields.Criticality // ""),
+        (.FindingProviderFields.RelatedFindings // "" | tostring),
+        (.FindingProviderFields.Severity // "" | tostring),
+        (.FindingProviderFields.Types // "" | tostring),
+        (.GeneratorDetails.Name // ""),
+        (.GeneratorDetails.Description // ""),
+        (.GeneratorDetails.Labels // "" | tostring),
+        (.GeneratorDetails.RuleId // ""),
+        (.Detection.Type // ""),
+        (.Detection.Details // "" | tostring),
+        (.Threats[0].Name // ""),
+        (.Threats[0].Type // ""),
+        (.Threats[0].ItemPaths // "" | tostring),
+        (.Threats[1].Name // ""),
+        (.Threats[1].Type // ""),
+        (.Threats[1].ItemPaths // "" | tostring),
+        .Sample // "",
+        ((.UserDefinedFields // {}) | to_entries | map("\(.key)=\(.value)") | join(";")),
+        ((.ProductFields // {}) | to_entries | map("\(.key)=\(.value)") | join(";")),
+        .WorkflowState // ""
+    ] | @csv
+    ' >> ${OUTPUT_FILE} 2>/dev/null
+    
+    # この ページの件数をカウント
+    PAGE_COUNT=$(echo "$RESULT" | jq -r '.Findings | length' 2>/dev/null)
+    TOTAL_COUNT=$((TOTAL_COUNT + PAGE_COUNT))
+    
+    echo "   ✅ ${PAGE_COUNT} 件取得（累計: ${TOTAL_COUNT} 件）"
+    
+    # 次のトークンを取得
+    NEXT_TOKEN=$(echo "$RESULT" | jq -r '.NextToken // empty' 2>/dev/null)
+    
+    # 次のトークンがない場合は終了
+    if [ -z "$NEXT_TOKEN" ] || [ "$NEXT_TOKEN" = "null" ]; then
+        echo "🎯 全てのページを取得完了"
+        break
+    fi
+    
+    PAGE=$((PAGE + 1))
+    
+    # APIレート制限対策（少し待機）
+    sleep 1
+    
+    # 10ページごとに進捗表示
+    if [ $((PAGE % 10)) -eq 0 ]; then
+        echo "📊 進捗: ${PAGE} ページ処理済み（${TOTAL_COUNT} 件）"
+    fi
+done
+
+# 最終結果表示
+echo ""
+echo "🎉 === 完全版・全項目・無制限取得完了！ ==="
+echo "📁 ファイル名: ${OUTPUT_FILE}"
+echo "📊 総レコード数: ${TOTAL_COUNT} 件"
+echo "📄 総ページ数: ${PAGE} ページ"
+echo "📏 ファイルサイズ: $(ls -lh ${OUTPUT_FILE} | awk '{print $5}')"
+echo ""
+echo "=== ファイル詳細 ==="
+echo "📋 項目数: $(head -1 ${OUTPUT_FILE} | tr ',' '\n' | wc -l) 項目"
+echo "📊 データ行数: $(tail -n +2 ${OUTPUT_FILE} | wc -l) 行"
+echo ""
+echo "=== プレビュー ==="
+echo "ヘッダー（最初の5項目）:"
+head -1 ${OUTPUT_FILE} | cut -d',' -f1-5
+echo ""
+echo "サンプルデータ（最初の100文字）:"
+head -2 ${OUTPUT_FILE} | tail -1 | cut -c1-100
+echo "..."
+echo ""
+echo "🚀 次のステップ:"
+echo "1. ファイルをダウンロード"
+echo "2. 巨大CSVファイルのため、Excel PowerQueryやBIツールでの開放を推奨"
+echo "3. 必要に応じて項目を絞り込んで再出力"
