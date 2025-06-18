@@ -1,12 +1,14 @@
-# 本当に容量が厳しい場合のみ
-echo "=== 完全クリーンアップ（最終手段） ==="
-echo "⚠️  すべてのCSV・JSON・ログファイルを削除します"
-read -p "本当にすべて削除しますか？ (y/N): " -n 1 -r
-echo
+# より強力な削除
+echo "=== 強制削除実行 ==="
 
-if [[ $REPLY =~ ^[Yy]$ ]]; then
-    rm -f *.csv *.json *.log *.out findings_*
-    echo "✅ 完全クリーンアップ完了"
-else
-    echo "完全クリーンアップをキャンセル"
-fi
+# 隠しファイルも含めて削除
+rm -rf *.csv *.json *.log *.out *.sh findings_* temp_* all_findings* complete_findings* simple_findings* rescued_*
+
+# nohup関連も削除
+rm -f nohup.out
+
+# その他一時ファイル
+rm -f progress.log error.log
+
+echo "✅ 強制削除完了"
+ls -la
