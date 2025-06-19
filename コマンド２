@@ -19,7 +19,4 @@ while true; do
     [ -z "$next_token" ] && break
     
     page=$((page + 1))
-    [ $page -gt 1000 ] && { echo "最大ページ数に達しました"; break; }
-    
-    sleep 0.1
 done
