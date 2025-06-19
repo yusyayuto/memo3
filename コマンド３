@@ -1,0 +1,10 @@
+echo "=== 完了 ==="
+total_lines=$(wc -l < security_hub_findings.csv)
+echo "総取得件数: $((total_lines-1))件"
+echo "ファイルサイズ: $(ls -lh security_hub_findings.csv | awk '{print $5}')"
+echo "出力ファイル: security_hub_findings.csv"
+echo ""
+echo "コンプライアンスステータス別集計:"
+tail -n +2 security_hub_findings.csv | cut -d',' -f7 | tr -d '"' | sed 's/^$/未設定/' | sort | uniq -c
+echo ""
+echo "✅ 完了！ファイルをダウンロードしてExcelで開いてください"
