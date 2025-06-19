@@ -1,1 +1,1 @@
-echo "検出結果タイトル,重大度ラベル,ワークフローステータス,リージョン名,製品名,リソースタイプとID,コンプライアンスステータス,最終更新日時" > security_hub_findings.csv
+echo "Title,Severity,WorkflowStatus,Region,ProductName,ResourceTypeAndId,ComplianceStatus,UpdatedAt" > security_hub_findings.csv
