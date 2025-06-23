@@ -1,9 +1,0 @@
-# 現状確認
-echo "=== 緊急状況確認 ==="
-ls -la all_findings* rescued_findings* nohup*
-echo ""
-echo "JSONファイル件数:"
-find . -name "*.json" -exec sh -c 'echo "{}: $(jq ". | length" "{}" 2>/dev/null || echo "読み込みエラー")"' \;
-echo ""
-echo "プロセス確認:"
-ps aux | grep -E "(aws|get-findings)" | grep -v grep

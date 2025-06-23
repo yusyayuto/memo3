@@ -1,0 +1,51 @@
+# 対象リージョン設定
+regions=("ap-northeast-1" "ap-northeast-3" "us-east-1")
+region_names=("東京" "大阪" "北部バージニア")
+
+total_all_regions=0
+
+for i in "${!regions[@]}"; do
+    region=${regions[$i]}
+    region_name=${region_names[$i]}
+    
+    echo "=== ${region_name}リージョン (${region}) の取得開始 ==="
+    
+    next_token=""
+    page=1
+    region_count=0
+    
+    while true; do
+        echo "  ${region_name} ページ ${page} 取得中..."
+        
+        if [ -z "$next_token" ]; then
+            response=$(aws securityhub get-findings --region ${region} --max-items 100 --output json 2>/dev/null)
+        else
+            response=$(aws securityhub get-findings --region ${region} --max-items 100 --starting-token "$next_token" --output json 2>/dev/null)
+        fi
+        
+        # エラーハンドリング（Security Hub未有効化等）
+        if [ $? -ne 0 ]; then
+            echo "  ${region_name}リージョンでエラー（Security Hub未有効化？）"
+            break
+        fi
+        
+        echo "$response" | jq -r '.Findings[]? | [(.Title // "N/A"),(.Severity.Label // "N/A"),(.Workflow.Status // "NEW"),(.Region // "'${region}'"),(.ProductName // "N/A"),(if .Resources and (.Resources | length > 0) then (.Resources[0].Type + ":" + (.Resources[0].Id // "N/A")) else "N/A" end),(.Compliance.Status // ""),(.UpdatedAt // .CreatedAt // "N/A")] | @csv' >> security_hub_findings.csv
+        
+        current=$(echo "$response" | jq '.Findings | length')
+        region_count=$((region_count + current))
+        total=$(wc -l < security_hub_findings.csv)
+        echo "    ${current}件取得 (${region_name}累計: ${region_count}件)"
+        
+        next_token=$(echo "$response" | jq -r '.NextToken // empty')
+        [ -z "$next_token" ] && break
+        
+        page=$((page + 1))
+    done
+    
+    echo "  ${region_name}リージョン完了: ${region_count}件"
+    total_all_regions=$((total_all_regions + region_count))
+    echo ""
+done
+
+echo "=== 全リージョン取得完了 ==="
+echo "総取得件数: ${total_all_regions}件"
