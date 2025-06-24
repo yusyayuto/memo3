@@ -1,0 +1,35 @@
+Sub A列の重複をM列に一覧出力()
+
+    Dim ws As Worksheet
+    Dim lastRow As Long
+    Dim dict As Object
+    Dim i As Long
+    Dim key As String
+    Dim outputRow As Long
+
+    Set ws = ThisWorkbook.Sheets("Sheet2")
+    Set dict = CreateObject("Scripting.Dictionary")
+
+    ' A列の最終行を取得
+    lastRow = ws.Cells(ws.Rows.Count, "A").End(xlUp).Row
+
+    ' A列の値をディクショナリに格納（重複排除）
+    For i = 2 To lastRow
+        key = Trim(ws.Cells(i, "A").Value)
+        If key <> "" Then
+            If Not dict.exists(key) Then
+                dict.Add key, True
+            End If
+        End If
+    Next i
+
+    ' M列に出力（2行目から）
+    outputRow = 2
+    For Each key In dict.Keys
+        ws.Cells(outputRow, "M").Value = key
+        outputRow = outputRow + 1
+    Next key
+
+    MsgBox "ユニークなA列の値をM列に出力しました！", vbInformation
+
+End Sub
