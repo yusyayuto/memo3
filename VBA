@@ -1,1 +1,46 @@
+Sub 転記処理()
+
+    Dim srcSheet As Worksheet
+    Dim dstSheet As Worksheet
+    Dim srcLastRow As Long, dstLastRow As Long
+    Dim srcDict As Object
+    Dim i As Long
+    Dim key As String
+
+    ' シート設定
+    Set srcSheet = ThisWorkbook.Sheets("Sheet1") ' 元データ
+    Set dstSheet = ThisWorkbook.Sheets("Sheet2") ' 出力先
+
+    ' ディクショナリ作成（キー：A列、値：配列[B列, C列, M列]）
+    Set srcDict = CreateObject("Scripting.Dictionary")
+    srcLastRow = srcSheet.Cells(srcSheet.Rows.Count, "A").End(xlUp).Row
+
+    For i = 2 To srcLastRow
+        key = Trim(srcSheet.Cells(i, "A").Value)
+        If key <> "" Then
+            srcDict(key) = Array( _
+                srcSheet.Cells(i, "B").Value, _
+                srcSheet.Cells(i, "C").Value, _
+                srcSheet.Cells(i, "M").Value _
+            )
+        End If
+    Next i
+
+    ' 出力処理
+    dstLastRow = dstSheet.Cells(dstSheet.Rows.Count, "A").End(xlUp).Row
+
+    For i = 2 To dstLastRow
+        key = Trim(dstSheet.Cells(i, "A").Value)
+        If srcDict.exists(key) Then
+            dstSheet.Cells(i, "B").Value = srcDict(key)(0)
+            dstSheet.Cells(i, "C").Value = srcDict(key)(1)
+            dstSheet.Cells(i, "D").Value = srcDict(key)(2)
+        Else
+            dstSheet.Cells(i, "B").Resize(1, 3).ClearContents ' 不一致なら空欄に
+        End If
+    Next i
+
+    MsgBox "転記完了しました！", vbInformation
+
+End Sub
 
