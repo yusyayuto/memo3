@@ -1,4 +1,12 @@
-Sub ApplyFormattingToExistingSheets()
+Write-Host “=== エラー詳細確認 ===”
+
+aws sts get-caller-identity
+
+Write-Host “`n東京リージョンでのエラー詳細:”
+aws securityhub describe-hub –region ap-northeast-1 2>&1
+
+Write-Host “`nget-findingsエラー詳細:”
+aws securityhub get-findings –region ap-northeast-1 –max-items 1 2>&1Sub ApplyFormattingToExistingSheets()
     '========================================
     ' 既存マージファイル用書式設定
     ' 4つの要求を一括適用：順序・列幅・フォント・太字
