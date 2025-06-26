@@ -11,7 +11,7 @@ Sub 転記処理()
     Set srcSheet = ThisWorkbook.Sheets("Sheet1") ' 元データ
     Set dstSheet = ThisWorkbook.Sheets("Sheet2") ' 出力先
 
-    ' ディクショナリ作成（キー：A列、値：配列[B列, C列, M列]）
+    ' ディクショナリ作成（キー：A列、値：配列[B列, C列, D列]）
     Set srcDict = CreateObject("Scripting.Dictionary")
     srcLastRow = srcSheet.Cells(srcSheet.Rows.Count, "A").End(xlUp).Row
 
@@ -21,7 +21,7 @@ Sub 転記処理()
             srcDict(key) = Array( _
                 srcSheet.Cells(i, "B").Value, _
                 srcSheet.Cells(i, "C").Value, _
-                srcSheet.Cells(i, "M").Value _
+                srcSheet.Cells(i, "D").Value _
             )
         End If
     Next i
@@ -40,7 +40,7 @@ Sub 転記処理()
         End If
     Next i
 
-    MsgBox "転記完了しました！", vbInformation
+    DsgBox "転記完了しました！", vbInformation
 
 End Sub
 
