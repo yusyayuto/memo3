@@ -40,7 +40,7 @@ Sub 転記処理()
         End If
     Next i
 
-    DsgBox "転記完了しました！", vbInformation
+    MsgBox "転記完了しました！", vbInformation
 
 End Sub
 
