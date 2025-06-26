@@ -1,0 +1,86 @@
+Sub 照合転記処理()
+    Dim ws1 As Worksheet, ws2 As Worksheet
+    Dim lastRow1 As Long, lastRow2 As Long
+    Dim i As Long, j As Long
+    Dim searchValue As String
+    Dim dict As Object
+    Dim found As Boolean
+    
+    ' エラーハンドリング
+    On Error GoTo ErrorHandler
+    
+    ' ワークシートの設定
+    Set ws1 = ThisWorkbook.Worksheets("Sheet1")  ' 元データ
+    Set ws2 = ThisWorkbook.Worksheets("Sheet2")  ' 転記先
+    
+    ' Dictionaryオブジェクトを作成（高速検索用）
+    Set dict = CreateObject("Scripting.Dictionary")
+    
+    ' Sheet1の最終行を取得
+    lastRow1 = ws1.Cells(ws1.Rows.Count, "A").End(xlUp).Row
+    
+    ' Sheet1のデータをDictionaryに格納（A列をキー、行番号を値とする）
+    For i = 1 To lastRow1
+        If ws1.Cells(i, 1).Value <> "" Then
+            dict(CStr(ws1.Cells(i, 1).Value)) = i
+        End If
+    Next i
+    
+    ' Sheet2の最終行を取得
+    lastRow2 = ws2.Cells(ws2.Rows.Count, "A").End(xlUp).Row
+    
+    ' 処理開始メッセージ
+    Application.ScreenUpdating = False
+    Application.Calculation = xlCalculationManual
+    
+    Dim processCount As Long
+    processCount = 0
+    
+    ' Sheet2の各行を処理
+    For i = 1 To lastRow2
+        searchValue = CStr(ws2.Cells(i, 1).Value)
+        
+        ' A列が空白でない場合のみ処理
+        If searchValue <> "" Then
+            ' Dictionaryで検索
+            If dict.Exists(searchValue) Then
+                ' 一致するデータが見つかった場合
+                Dim sourceRow As Long
+                sourceRow = dict(searchValue)
+                
+                ' Sheet2のB、C、D列がすべて空白かチェック
+                If ws2.Cells(i, 2).Value = "" And _
+                   ws2.Cells(i, 3).Value = "" And _
+                   ws2.Cells(i, 4).Value = "" Then
+                    
+                    ' データを転記
+                    ws2.Cells(i, 2).Value = ws1.Cells(sourceRow, 2).Value  ' B列
+                    ws2.Cells(i, 3).Value = ws1.Cells(sourceRow, 3).Value  ' C列
+                    ws2.Cells(i, 4).Value = ws1.Cells(sourceRow, 4).Value  ' D列
+                    
+                    processCount = processCount + 1
+                End If
+            End If
+        End If
+    Next i
+    
+    ' 設定を元に戻す
+    Application.ScreenUpdating = True
+    Application.Calculation = xlCalculationAutomatic
+    
+    ' 完了メッセージ
+    MsgBox processCount & "件のデータを転記しました。", vbInformation, "処理完了"
+    
+    Exit Sub
+    
+ErrorHandler:
+    ' エラー時の処理
+    Application.ScreenUpdating = True
+    Application.Calculation = xlCalculationAutomatic
+    MsgBox "エラーが発生しました：" & Err.Description, vbCritical, "エラー"
+End Sub
+
+' ボタン用のシンプル版（上記と同じ処理）
+Sub 実行ボタン_Click()
+    Call 照合転記処理
+End Sub
