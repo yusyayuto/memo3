@@ -1,0 +1,12 @@
+SELECT 
+    'Total events today' as check_type,
+    COUNT(*) as count
+FROM log_analysis_db.cloudtrail_logs_pp
+WHERE timestamp = '2024/12/26'
+UNION ALL
+SELECT 
+    'Login events today' as check_type,
+    COUNT(*) as count
+FROM log_analysis_db.cloudtrail_logs_pp
+WHERE timestamp = '2024/12/26'
+  AND eventname = 'ConsoleLogin';
