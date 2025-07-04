@@ -1,0 +1,174 @@
+1️⃣ KMS カスタマーマネージドキーの作成
+AWS コンソール → KMS (Key Management Service) に移動
+
+左メニュー「カスタマー管理型キー」→ 「キーを作成」
+
+キータイプ → 対称キー
+
+用途 → 暗号化と復号化
+
+次へ をクリック
+
+エイリアス: tkkk-pj-kms-sasaki
+
+管理者: 自身のIAMユーザーを選択
+
+キーユーザー: 後で CloudWatch Logs, Firehose, S3 用のロールを追加（今は空でもOK）
+
+キーを作成
+
+2️⃣ S3 バケット作成 (ログ保存用)
+AWS コンソール → S3
+
+「バケットを作成」
+
+バケット名: tkkk-pj-s3-log-sasaki
+
+リージョン: ap-northeast-1
+
+パブリックアクセス: 全ブロックをON（デフォルト）
+
+バージョニング: 有効化
+
+暗号化:
+
+✅ デフォルト暗号化有効
+
+✅ SSE-KMS
+
+KMS キー: tkkk-pj-kms-sasaki
+
+「バケットを作成」
+
+3️⃣ S3 バケット作成 (S3アクセスログ保存用)
+同様に以下で作成:
+
+バケット名: tkkk-pj-s3-accesslog-sasaki
+
+暗号化: tkkk-pj-kms-sasaki
+
+4️⃣ S3 のアクセスログ有効化
+S3 コンソール → tkkk-pj-s3-log-sasaki を開く
+
+「プロパティ」 → 「サーバーアクセスログ」 → 編集
+
+サーバーアクセスログ: 有効化
+
+記録先バケット: tkkk-pj-s3-accesslog-sasaki
+
+プレフィックス: accesslog/
+
+保存
+
+5️⃣ IAM ロール作成（Firehose用）
+AWS コンソール → IAM → ロール → 作成
+
+信頼されたエンティティ: Firehose
+
+ポリシー:
+
+AmazonS3FullAccess (最小化する場合、必要バケットの書き込み専用に絞る)
+
+KMS の暗号化解除権限（tkkk-pj-kms-sasaki のみに絞る）
+
+ロール名: tkkk-pj-firehose-role-sasaki
+
+作成
+
+6️⃣ CloudWatch Logs グループ作成
+AWS コンソール → CloudWatch → ロググループ
+
+「ロググループを作成」
+
+名前: /tkkk/pj/log/sasaki
+
+暗号化: tkkk-pj-kms-sasaki を選択
+
+作成
+
+7️⃣ Windows EC2 に CloudWatch Agent インストール・設定
+EC2 に RDP 接続
+
+PowerShell で CloudWatch Agent インストーラダウンロード＆実行
+
+powershell
+コピーする
+編集する
+Invoke-WebRequest https://s3.amazonaws.com/amazoncloudwatch-agent/windows/amd64/latest/AmazonCloudWatchAgent.zip -OutFile C:\AmazonCloudWatchAgent.zip
+Expand-Archive -Path C:\AmazonCloudWatchAgent.zip -DestinationPath C:\Program Files\Amazon\AmazonCloudWatchAgent
+cd 'C:\Program Files\Amazon\AmazonCloudWatchAgent'
+.\install.ps1
+CloudWatch Agent 設定ウィザード or JSON を用意して以下を監視
+
+Windows イベントログ
+
+IISログ、システムログ、アプリケーションログ
+
+8️⃣ Firehose の作成
+AWS コンソール → Kinesis → Firehose
+
+「配信ストリームの作成」
+
+名前: tkkk-pj-firehose-sasaki
+
+ソース: CloudWatch Logs
+
+変換: なし
+
+配信先: S3 → tkkk-pj-s3-log-sasaki
+
+暗号化: tkkk-pj-kms-sasaki
+
+IAMロール: tkkk-pj-firehose-role-sasaki
+
+作成
+
+9️⃣ CloudWatch Logs サブスクリプションフィルタ設定
+CloudWatch Logs → 対象ロググループを選択
+
+「アクション」→「サブスクリプションフィルターの作成」
+
+デスティネーション: Firehose
+
+Firehose名: tkkk-pj-firehose-sasaki
+
+フィルタパターン: 空欄 (全ログ送信)
+
+作成
+
+🔟 Athena 用テーブル作成
+Athena コンソール → クエリエディタ
+
+クエリ結果保存場所: tkkk-pj-s3-log-sasaki/athena-results/
+
+データベース作成:
+
+sql
+コピーする
+編集する
+CREATE DATABASE tkkk_pj_log_sasaki;
+テーブル作成例（圧縮・保存形式は Firehose 設定により調整）
+
+sql
+コピーする
+編集する
+CREATE EXTERNAL TABLE IF NOT EXISTS tkkk_pj_log_sasaki.cloudwatch_logs (
+  log string
+)
+PARTITIONED BY (`dt` string)
+ROW FORMAT SERDE 'org.openx.data.jsonserde.JsonSerDe'
+LOCATION 's3://tkkk-pj-s3-log-sasaki/'
+TBLPROPERTIES (
+  'projection.enabled'='true',
+  'projection.dt.type'='date',
+  'projection.dt.range'='2024/01/01,NOW',
+  'projection.dt.format'='yyyy/MM/dd',
+  'storage.location.template'='s3://tkkk-pj-s3-log-sasaki/${dt}/'
+);
+まとめ
+この手順で以下が実現します:
+✅ CloudWatch Logs → Firehose → S3 の暗号化保管
+✅ S3 アクセスログも別バケットに保管
+✅ Athena で簡単クエリ可能な環境
+✅ 管理者権限前提で最短・確実な構成
+
