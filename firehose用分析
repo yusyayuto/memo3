@@ -1,0 +1,96 @@
+✅ 3️⃣ データベース作成
+Athena のクエリエディタで以下を実行：
+
+sql
+コピーする
+編集する
+CREATE DATABASE tkkk_pj_logdb_sasaki
+COMMENT 'ログ分析用DB';
+👉 左側パネルの「データ」で DB が作成されたことを確認
+
+✅ 4️⃣ Firehose のログ用テーブル作成
+Athena のクエリエディタで以下のように作成（出力先S3パスは実際のものに置き換え）：
+
+sql
+コピーする
+編集する
+CREATE EXTERNAL TABLE IF NOT EXISTS tkkk_pj_logdb_sasaki.firehose_logs (
+  message string
+)
+PARTITIONED BY (day string)
+ROW FORMAT SERDE 'org.openx.data.jsonserde.JsonSerDe'
+LOCATION 's3://＜Firehose出力先バケット＞/＜プレフィックス＞/'
+TBLPROPERTIES (
+  "projection.enabled" = "true",
+  "projection.day.type" = "date",
+  "projection.day.range" = "2024/01/01,NOW",
+  "projection.day.format" = "yyyy/MM/dd",
+  "projection.day.interval" = "1",
+  "projection.day.interval.unit" = "DAYS",
+  "storage.location.template" = "s3://＜Firehose出力先バケット＞/＜プレフィックス＞/${day}/"
+);
+✅ 5️⃣ S3 アクセスログ用テーブル作成
+S3 アクセスログはカスタムログフォーマットなので以下例：
+
+sql
+コピーする
+編集する
+CREATE EXTERNAL TABLE IF NOT EXISTS tkkk_pj_logdb_sasaki.s3_access_logs (
+  bucket_owner string,
+  bucket string,
+  request_datetime string,
+  remote_ip string,
+  requester string,
+  request_id string,
+  operation string,
+  key string,
+  request_uri string,
+  http_status string,
+  error_code string,
+  bytes_sent bigint,
+  object_size bigint,
+  total_time int,
+  turn_around_time int,
+  referrer string,
+  user_agent string,
+  version_id string
+)
+ROW FORMAT SERDE 'org.apache.hadoop.hive.serde2.RegexSerDe'
+WITH SERDEPROPERTIES (
+  'input.regex' = '([^ ]*) ([^ ]*) \\[([^\\]]*)\\] ([^ ]*) ([^ ]*) ([^ ]*) ([^ ]*) ([^ ]*) \"([^\"]*)\" ([^ ]*) ([^ ]*) ([^ ]*) ([^ ]*) ([^ ]*) ([^ ]*) \"([^\"]*)\" \"([^\"]*)\" ([^ ]*)'
+)
+LOCATION 's3://＜アクセスログのバケット名＞/AWSLogs/＜アカウントID＞/S3AccessLog/'
+TBLPROPERTIES (
+  'projection.enabled' = 'false'
+);
+👉 ロケーションパスは実際のものに置き換えてください。
+
+✅ 6️⃣ クエリ実行例
+Firehose ログ確認
+sql
+コピーする
+編集する
+SELECT * FROM tkkk_pj_logdb_sasaki.firehose_logs
+WHERE day = '2024/07/01'
+LIMIT 10;
+S3 アクセスログ確認
+sql
+コピーする
+編集する
+SELECT request_datetime, remote_ip, operation, key, http_status
+FROM tkkk_pj_logdb_sasaki.s3_access_logs
+WHERE key = 'testfile.txt'
+LIMIT 10;
+💡 補足
+クエリは日付・キー・IP などで絞るとコスト削減になります。
+
+パーティション投影（Firehose の場合）は日付に応じたフォルダ階層が必要。
+
+Athena の結果は指定の S3 に保存、確認可能。
+
+🌟 次のアクション
+もしロケーションパスや正規表現が不明なら、実際の S3 ログのパスやサンプルログを教えてください。
+正しいテーブル定義にして最適なクエリを作ります。
+
+必要ならクエリ集や画面キャプチャベースの手順も作成します！
+「これをもっと詳しく！」という部分があれば遠慮なく言ってください。
