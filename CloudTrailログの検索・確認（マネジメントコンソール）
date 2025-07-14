@@ -72,3 +72,55 @@ CloudTrailの構成図（簡易）
 [CloudTrail]
    ├── イベント履歴（90日間、即時確認、設定不要）
    └── 証跡（Trail） ─→ S3保存 ─→ Athena / Glue / Lake Formation
+
+
+補足：SigninFailure の確認方法と注意点
+🔸 背景
+CloudTrailの「イベント履歴」では、エラーコード（errorCode）を直接フィルター項目として指定することはできない。
+そのため、SigninFailure などの失敗イベントを確認する際は、検索バーを使って部分一致検索し、該当ログの詳細を個別に確認する必要がある。
+
+🔸 実際の操作手順
+イベント履歴画面を開く
+
+検索バーに SigninFailure を入力
+
+検索結果に表示された各イベントを開き、以下を確認する：
+
+eventName: ConsoleLogin
+
+errorCode: SigninFailure
+
+responseElements.ConsoleLogin: Failure
+
+必要に応じてCSVで出力してExcelで整形・分析を行うと可視化が容易
+
+✅ 監査・運用に活用できる代表的な errorCode 一覧
+エラーコード	用途 / 意味	代表的なイベント名	備考
+SigninFailure	サインイン失敗	ConsoleLogin	パスワード間違いなどのログイン失敗
+AccessDenied	権限拒否	多くの操作で共通	IAM権限不足、SCPブロックなど
+UnauthorizedOperation	許可されない操作	EC2操作など	より広範なアクセス違反。操作そのものが拒否される
+ExpiredToken	一時クレデンシャルの期限切れ	AssumeRole 操作など	SSOやSTS利用時によく発生
+ThrottlingException	API制限超過（レート制限）	各種API	呼び出し頻度が制限を超えた
+InvalidClientTokenId	認証情報が無効	各種API	古いアクセスキー、設定ミスなどで発生
+RequestLimitExceeded	リクエスト数の上限超過	各種API	同時実行制限などによる失敗
+NoSuchEntity	IAMやS3などでリソースが存在しない	GetUser, GetRole, GetObject など	削除済みやタイプミスなど
+
+🔸 errorCode は CloudTrail の JSON ログ内に格納されるフィールドであり、GUIでは検索バーで部分一致検索 → 詳細確認が必要
+🔸 Athena や CloudWatch Logs Insights であれば errorCode = 'AccessDenied' などの完全一致検索が可能
+
+🧠 実務での活用例
+ログイン失敗のアカウント洗い出し
+　→ ConsoleLogin + SigninFailure で検索し、対象ユーザー・IP・タイムスタンプを確認
+
+不審操作の検出
+　→ UnauthorizedOperation や AccessDenied によって許可されていない操作の試行を特定
+
+SSO環境におけるトークン期限切れの確認
+　→ ExpiredToken による API 実行失敗が頻発していないかを監視
+
+📌 まとめ
+内容	方法	備考
+SigninFailure の確認	検索バーに SigninFailure 入力 → 各ログ詳細を開く	errorCode はフィルター不可、部分一致検索で対応
+errorCode 一覧の活用	よく使うコードを把握しておくことで、GUI検索やAthena分析が効率化	AccessDenied, UnauthorizedOperation など
+
+
