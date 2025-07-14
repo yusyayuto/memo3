@@ -1,0 +1,111 @@
+CloudWatch LogsでWindowsイベントログを確認・検索する方法
+1. 💡 概要
+AWSでWindows Serverを運用する場合、OSのイベントログ（例：Application、System、Security）をCloudWatch Logsに送信することで、クラウド上での監視・分析が可能になります。
+
+2. ⚙ 必要な構成（全体像）
+構成要素	役割
+CloudWatch Agent	WindowsのイベントログをCloudWatch Logsへ送る
+CloudWatch Logs	イベントログを保存・閲覧・検索するログサービス
+CloudWatch Logs Insights	ログに対してSQLライクなクエリで分析ができるツール
+
+3. 🛠️ 事前準備：CloudWatch Agent の設定
+✅ 手順（参考：AWS公式: CloudWatch Agentの設定）
+SSMを使ってCloudWatch Agentをインストール
+　（または手動でダウンロード・インストール）
+
+設定ファイルにWindowsイベントログのセクションを追加：
+
+json
+コピーする
+編集する
+{
+  "logs": {
+    "logs_collected": {
+      "windows_events": {
+        "collect_list": [
+          {
+            "event_name": "Application",
+            "levels": ["ERROR", "WARNING"]
+          },
+          {
+            "event_name": "System",
+            "levels": ["ERROR", "WARNING"]
+          },
+          {
+            "event_name": "Security",
+            "levels": ["ERROR", "INFORMATION", "WARNING"]
+          }
+        ]
+      }
+    }
+  }
+}
+🔸 出力先の log_group_name や log_stream_name も設定が必要（例：Windows-EventLogs）
+
+SSM Run Command やコマンドプロンプトでAgentを起動：
+
+cmd
+コピーする
+編集する
+amazon-cloudwatch-agent-ctl -a fetch-config -m ec2 -c file:config.json -s
+4. 🔍 CloudWatch Logs Insights でイベントを検索する方法
+✅ 画面操作手順
+AWSコンソール → CloudWatch → ロググループ → Windowsのロググループを選択（例：Windows-EventLogs）
+
+「ログの検索」 → 「CloudWatch Logs Insights」を開く
+
+ロググループを選択し、下記クエリを実行
+
+5. 🧪 検索クエリ例と解説（Windowsイベントログ）
+◉ 例1：ログオン失敗イベント（Securityログ）
+sql
+コピーする
+編集する
+fields @timestamp, @message
+| filter @message like /ログオンに失敗しました/
+| sort @timestamp desc
+| limit 20
+@message：ログの本文
+
+like /.../：特定キーワードを含むログを抽出
+
+sort：時間順に並べる
+
+limit：表示件数制限
+
+◉ 例2：サービスの停止（Systemログ）
+sql
+コピーする
+編集する
+fields @timestamp, @message
+| filter @message like /サービスは終了しました/
+| sort @timestamp desc
+| limit 20
+6. 🧠 実務ユースケース例
+ユースケース	内容
+不正ログオンの監視	ログオンに失敗しました を検索し、IPやユーザー名を確認
+サービス停止監視	重要なWindowsサービスの停止をログで検知
+パッチ適用後の挙動確認	Applicationログのエラー増加をチェック
+
+7. 📊 Athenaとの連携（補足）
+CloudWatch Logs単体では長期的な分析が難しいため、Firehoseを経由してS3にエクスポートし、Athenaで検索分析する構成もあります。
+詳細な手順は別途ご案内できますが、簡単に流れを記載します：
+
+arduino
+コピーする
+編集する
+Windows Server
+   ↓ CloudWatch Agent
+CloudWatch Logs
+   ↓（サブスクリプションフィルター）
+Kinesis Firehose
+   ↓
+Amazon S3
+   ↓
+Athena（クエリ分析）
+8. 🔚 まとめ
+項目	内容
+目的	WindowsイベントログをAWSで可視化・検索する
+必要構成	CloudWatch Agent → Logs → Logs Insights
+検索方法	@message like /キーワード/ で検索
+代表的なイベント	ログオン失敗、サービス停止、アプリケーションエラーなど
