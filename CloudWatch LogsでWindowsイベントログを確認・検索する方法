@@ -217,3 +217,77 @@ Glue Crawlerで自動スキーマ生成するとクエリが楽になる
 S3バケットのライフサイクルルールで古いログを自動削除してコスト削減可能
 
 Athenaはクエリごとに課金されるので、パーティション分割とクエリ範囲の限定が重要
+
+
+ 1. CloudWatch Agent のインストール（Windows）
+方法A: SSM 経由で自動インストール（推奨）
+powershell
+コピーする
+編集する
+# 管理者権限の PowerShell で実行
+Invoke-WebRequest https://s3.amazonaws.com/amazoncloudwatch-agent/windows/amd64/latest/amazon-cloudwatch-agent.msi -OutFile "C:\Temp\amazon-cloudwatch-agent.msi"
+msiexec /i "C:\Temp\amazon-cloudwatch-agent.msi" /quiet
+方法B: マネジメントコンソール → SSM → Run Command からインストール
+🔐 2. IAMロールの設定（EC2にアタッチ）
+必要なポリシー
+CloudWatchAgentServerPolicy
+
+AmazonSSMManagedInstanceCore（SSM経由で操作する場合）
+
+📝 3. 設定ファイルの作成（JSON）
+例：C:\ProgramData\Amazon\AmazonCloudWatchAgent\amazon-cloudwatch-agent.json
+json
+コピーする
+編集する
+{
+  "logs": {
+    "logs_collected": {
+      "windows_events": {
+        "collect_list": [
+          { "event_name": "Application", "levels": ["ERROR", "WARNING"] },
+          { "event_name": "System", "levels": ["ERROR", "WARNING"] },
+          { "event_name": "Security", "levels": ["ERROR", "INFORMATION"] }
+        ]
+      }
+    },
+    "log_stream_name": "{instance_id}",
+    "log_group_name": "Your-LogGroup-Name"
+  }
+}
+🔁 Your-LogGroup-Name はCloudWatch Logs側であらかじめ作成しておく（または自動作成される）
+
+⚙️ 4. 設定ファイルを適用
+powershell
+コピーする
+編集する
+# 設定ファイルを適用（fetch-configで読み込み＆起動）
+& "C:\Program Files\Amazon\AmazonCloudWatchAgent\amazon-cloudwatch-agent-ctl.ps1" -a fetch-config -m ec2 -c file:"C:\ProgramData\Amazon\AmazonCloudWatchAgent\amazon-cloudwatch-agent.json" -s
+🔍 -s で起動まで行う
+
+📈 5. CloudWatch Logs で確認
+ロググループ：Your-LogGroup-Name
+
+ログストリーム：i-xxxxxxxx/messages のようなインスタンスIDベースで生成される
+
+ログの内容が反映されていれば成功
+
+💡 補足：トラブルシューティング
+確認項目	方法例
+Agent のステータス	amazon-cloudwatch-agent-ctl.ps1 -a status
+ログファイル確認	C:\ProgramData\Amazon\AmazonCloudWatchAgent\Logs\
+Windows イベントログの確認	Event Viewer（イベントビューア） で手動確認
+ポリシーが足りない場合の挙動	PutLogEvents is not authorized のようなエラーが出る
+
+✅ 完了後の構成図（再確認）
+css
+コピーする
+編集する
+[Windows EC2 Instance]
+    ↓（CloudWatch Agent）
+[CloudWatch Logs Log Group]
+    ↓（Subscription Filter）
+[Firehose Delivery Stream]
+    ↓
+[S3 Bucket]
+    ↓
+[Athenaで分析]
