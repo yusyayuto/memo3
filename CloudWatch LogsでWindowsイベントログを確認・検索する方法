@@ -109,3 +109,111 @@ Athena（クエリ分析）
 必要構成	CloudWatch Agent → Logs → Logs Insights
 検索方法	@message like /キーワード/ で検索
 代表的なイベント	ログオン失敗、サービス停止、アプリケーションエラーなど
+
+✅ Windows ServerでCloudWatch Agentを使ったログ送信手順（インストール〜起動）
+✅ Athenaとの連携構成と分析までのステップ
+この2つの重要ポイントを詳しく解説します。
+
+🛠 1. Windows ServerへのCloudWatch Agentインストール・起動手順
+🔹 目的
+Windowsイベントログ（System, Application, Security）をCloudWatch Logsに送信し、可視化・監査できるようにする
+
+✅ 手順概要
+ステップ	内容
+1	SSM Agentが有効になっていることを確認
+2	CloudWatch Agentパッケージをダウンロードしてインストール
+3	設定ファイル（JSON形式）を作成
+4	CloudWatch Agentを起動し、設定を適用
+
+🔸 1. SSM Agent の確認
+SSMを利用してCloudWatch Agentを操作するには、インスタンスにSSM Agentが動作しており、IAMロールに AmazonSSMManagedInstanceCore がアタッチされている必要があります。
+
+🔸 2. CloudWatch Agent のインストール方法
+方法①：SSMから自動インストール（推奨）
+bash
+コピーする
+編集する
+# Systems Manager > Run Command から次を選択
+コマンドドキュメント：AmazonCloudWatch-ManageAgent
+コマンド：Install
+対象：対象のWindows EC2
+方法②：手動インストール
+公式ダウンロードリンクからWindows用のMSIファイルを取得
+
+Windows上でインストーラを実行（例：AmazonCloudWatchAgent.msi）
+
+🔸 3. CloudWatch Agent 設定ファイルの作成（例）
+json
+コピーする
+編集する
+{
+  "logs": {
+    "logs_collected": {
+      "windows_events": {
+        "collect_list": [
+          { "event_name": "Application", "levels": ["ERROR", "WARNING"] },
+          { "event_name": "System", "levels": ["ERROR", "WARNING"] },
+          { "event_name": "Security", "levels": ["ERROR", "INFORMATION"] }
+        ]
+      }
+    },
+    "log_stream_name": "{instance_id}"
+  }
+}
+🔸 4. 起動と設定反映（コマンド）
+PowerShell / コマンドプロンプトで実行：
+cmd
+コピーする
+編集する
+cd "C:\Program Files\Amazon\AmazonCloudWatchAgent\"
+amazon-cloudwatch-agent-ctl -a fetch-config -m ec2 -c file:C:\cwagent-config.json -s
+-a fetch-config：設定ファイルを読み込む
+
+-s：起動
+
+📦 2. Athenaとの連携（構成とステップ）
+🎯 目的
+CloudWatch Logsに蓄積したログを、S3へ自動転送し、AthenaでSQLクエリ検索できるようにする
+
+✅ 構成イメージ
+text
+コピーする
+編集する
+[Windows Server]
+  ↓ CloudWatch Agent
+[CloudWatch Logs]
+  ↓（フィルター）
+[Amazon Kinesis Data Firehose]
+  ↓
+[Amazon S3]
+  ↓
+[Athena]
+✅ 手順フロー
+ステップ	内容
+1	CloudWatch Logsのサブスクリプションフィルターを作成（Firehose連携）
+2	Kinesis Firehoseのデリバリーストリームを作成（S3を出力先）
+3	S3バケットにログが自動保存されることを確認
+4	Athenaでクエリ可能なテーブルを作成（GlueまたはAthena DDL）
+5	AthenaでSQLクエリを実行してログ分析を行う
+
+✅ Athena用のテーブル例（JSON形式ログを想定）
+sql
+コピーする
+編集する
+CREATE EXTERNAL TABLE windows_event_logs (
+  `@timestamp` string,
+  `@message` string,
+  `logStream` string
+)
+ROW FORMAT SERDE 'org.openx.data.jsonserde.JsonSerDe'
+LOCATION 's3://your-bucket-name/path/to/logs/'
+🔸 日付ごとにパーティションを切る設計も可能（コスト最適化の観点で重要）
+
+📌 実務Tips
+Kinesis Firehoseはバッファ時間 or サイズでS3に書き込む → 遅延を考慮する
+
+Glue Crawlerで自動スキーマ生成するとクエリが楽になる
+
+S3バケットのライフサイクルルールで古いログを自動削除してコスト削減可能
+
+Athenaはクエリごとに課金されるので、パーティション分割とクエリ範囲の限定が重要
