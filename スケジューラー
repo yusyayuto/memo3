@@ -1,0 +1,105 @@
+EC2をEventBridge Schedulerで自動起動・停止させる手順（CMK対応・コンソール操作）
+🔧 1. 構成の全体像
+リソース	説明
+EC2インスタンス	起動/停止の対象。EBSはCMKで暗号化されている
+EventBridge Scheduler（新）	時刻ベースでAPIを自動実行するサービス
+IAMロール	スケジューラーがEC2やKMSにアクセスできるようにする
+KMS（CMK）	EBSボリュームの暗号化を復号するための鍵。EC2起動時に使用される
+
+🔑 2. 前提：CMK暗号化のEBSについての注意点
+🔹 ポイントまとめ
+CMK（カスタマー管理キー）で暗号化されたEBSは、起動時に復号処理が必要
+
+EC2を自動で起動するためには、その操作を実行するIAMロールにKMSキーへのアクセス権限が必要
+
+具体的には以下のようなKMSポリシーまたはIAMポリシーが必要：
+
+json
+コピーする
+編集する
+{
+  "Effect": "Allow",
+  "Action": [
+    "kms:Decrypt",
+    "kms:GenerateDataKey*"
+  ],
+  "Resource": "arn:aws:kms:region:account-id:key/key-id"
+}
+🧱 3. IAMロールの作成（スケジューラー用）
+🔹 手順（コンソール操作）
+AWSマネジメントコンソール → IAM → ロール → 「ロールを作成」
+
+信頼されたエンティティ → 「AWSサービス」 → EventBridge Scheduler
+
+権限ポリシー → カスタムで以下をアタッチ（後述の例）
+
+✅ IAMポリシー例（EC2とKMS）
+json
+コピーする
+編集する
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": [
+        "ec2:StartInstances",
+        "ec2:StopInstances"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Effect": "Allow",
+      "Action": [
+        "kms:Decrypt",
+        "kms:GenerateDataKey*"
+      ],
+      "Resource": "arn:aws:kms:region:account-id:key/key-id"
+    }
+  ]
+}
+🕒 4. スケジューラーの作成（コンソール）
+🔸 起動・停止それぞれ別々に作成する必要があります
+
+✅ A. EC2の自動起動スケジューラー作成
+ステップ	操作内容
+1	AWSコンソール → EventBridge Scheduler → 「スケジューラーを作成」
+2	スケジューラー名：ec2-start-scheduler
+3	スケジュールの設定：
+例）固定スケジュール、毎日 08:00（JST）
+4	ターゲットタイプ：AWSサービスのAPI呼び出し
+5	サービス：EC2 / API：StartInstances
+6	入力（JSON形式）：以下のように入力：
+
+json
+コピーする
+編集する
+{
+  "InstanceIds": ["i-xxxxxxxxxxxxxxxxx"]
+}
+| 7 | IAMロール：先ほど作成したロールを選択 |
+| 8 | 作成を完了 |
+
+✅ B. EC2の自動停止スケジューラー作成
+上記と同様の手順で以下の点を変更：
+
+項目	内容
+スケジューラー名	ec2-stop-scheduler
+スケジュール	例）毎日 19:00（JST）
+API	StopInstances
+入力JSON	同じく InstanceIds を指定
+
+🧠 5. 補足：Excel転記用まとめ
+処理	スケジューラー名	API	実行時刻（例）	入力JSON	注意点
+起動	ec2-start-scheduler	StartInstances	毎日08:00	{"InstanceIds": ["i-xxxx"]}	IAMロールがKMSにアクセス可能であること
+停止	ec2-stop-scheduler	StopInstances	毎日19:00	{"InstanceIds": ["i-xxxx"]}	同上
+
+🔗 6. AWS公式ドキュメントリンク
+EventBridge Scheduler – AWS公式
+
+スケジューラーのターゲットにEC2を指定する方法
+
+EC2のAPIリファレンス（StartInstances）
+
+KMSポリシーの書き方
+
